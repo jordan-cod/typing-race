@@ -1,0 +1,131 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  API_IMAGE: ghcr.io/${{ github.repository }}/api
+  WEB_IMAGE: ghcr.io/${{ github.repository }}/web
+
+jobs:
+  checks:
+    name: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.13
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bunx biome check --error-on-warnings .
+      - run: bun run test
+
+  build:
+    name: build ${{ matrix.app }}
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [api, web]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          # A raiz do monorepo: o lockfile e o pacote `protocol` sao do workspace.
+          context: .
+          file: apps/${{ matrix.app }}/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/${{ matrix.app }}:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/${{ matrix.app }}:latest
+          # O Vite grava este valor dentro do bundle no build. Site e API vivem
+          # no mesmo dominio, entao o navegador fala com a origem de onde veio.
+          build-args: |
+            VITE_API_URL=https://${{ secrets.TYPING_DOMAIN }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  deploy:
+    name: deploy
+    needs: build
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      # O token do job vive o tempo do job. Guardar um permanente no servidor
+      # seria uma credencial parada esperando vazar.
+      - name: Log the server in to GHCR
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: |
+            echo "${{ secrets.GITHUB_TOKEN }}" \
+              | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Pull and start
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: |
+            set -e
+            cd ${{ secrets.DEPLOY_PATH }}
+            {
+              echo "API_IMAGE=${{ env.API_IMAGE }}:${{ github.sha }}"
+              echo "WEB_IMAGE=${{ env.WEB_IMAGE }}:${{ github.sha }}"
+              echo "DEPLOYED_SHA=${{ github.sha }}"
+            } > .env.image
+            docker compose --env-file .env --env-file .env.image pull
+            docker compose --env-file .env --env-file .env.image up -d --remove-orphans
+            docker image prune -f
+
+      - name: Log the server out of GHCR
+        if: always()
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: docker logout ghcr.io
+
+      - name: Health check
+        run: |
+          for attempt in $(seq 1 10); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "https://${{ secrets.TYPING_DOMAIN }}/" || true)
+            [ "$code" = "200" ] && { echo "up (attempt $attempt)"; exit 0; }
+            echo "attempt $attempt: $code"
+            sleep 6
+          done
+          echo "did not return 200 after deploy"
+          exit 1
