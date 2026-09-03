@@ -93,19 +93,3 @@ export const PASSAGES: readonly Passage[] = [
     text: "Domingo a tarde tem uma luz especifica, meio laranja, que nenhum outro dia da semana consegue imitar direito.",
   },
 ];
-
-/**
- * Picks a passage the room has not used yet, so "race again" never repeats until the whole
- * set is exhausted.
- */
-export function pickPassage(
-  usedIds: readonly string[],
-  random: () => number = Math.random,
-): Passage {
-  const unused = PASSAGES.filter((passage) => !usedIds.includes(passage.id));
-  const pool = unused.length > 0 ? unused : PASSAGES;
-  const index = Math.floor(random() * pool.length);
-  const passage = pool[Math.min(index, pool.length - 1)];
-  if (!passage) throw new Error("PASSAGES must not be empty");
-  return passage;
-}

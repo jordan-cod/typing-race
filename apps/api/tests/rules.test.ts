@@ -1,11 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import {
+  buildStream,
   checkProgress,
   computeAccuracy,
   computeWpm,
   MAX_CHARS_PER_SECOND,
+  PASSAGES,
   PROGRESS_GRACE_CHARS,
+  RACE_DURATION_MS,
   rankPlayers,
+  STREAM_LENGTH,
 } from "@typing-race/protocol";
 
 describe("computeWpm", () => {
@@ -39,13 +43,42 @@ describe("computeAccuracy", () => {
   });
 });
 
+describe("buildStream", () => {
+  test("carries more text than the fastest possible minute", () => {
+    const stream = buildStream(() => 0.5);
+    const fastestPossible = (RACE_DURATION_MS / 1000) * MAX_CHARS_PER_SECOND;
+    expect(stream.length).toBeGreaterThanOrEqual(STREAM_LENGTH);
+    expect(stream.length).toBeGreaterThan(fastestPossible);
+  });
+
+  test("is continuous prose, not a list", () => {
+    const stream = buildStream(() => 0.5);
+    expect(stream).not.toContain("\n");
+    expect(stream.trim()).toBe(stream);
+  });
+
+  test("is the same for everyone when the room builds it once", () => {
+    // The room builds one stream and hands the same string to every player; two builds from
+    // the same source of randomness must agree, or a replay would not be reproducible.
+    const seeded = () => 0.42;
+    expect(buildStream(seeded)).toBe(buildStream(seeded));
+  });
+
+  test("reuses the passages it has instead of inventing text", () => {
+    const stream = buildStream(() => 0.5);
+    const first = PASSAGES[0];
+    if (!first) throw new Error("no passages");
+    expect(stream).toContain(first.text);
+  });
+});
+
 describe("checkProgress", () => {
   const base = {
     previousChars: 0,
     nextChars: 0,
     previousErrors: 0,
     nextErrors: 0,
-    passageLength: 120,
+    streamLength: STREAM_LENGTH,
     elapsedMs: 10_000,
   };
 
@@ -54,19 +87,19 @@ describe("checkProgress", () => {
     expect(checkProgress({ ...base, nextChars: 60 })).toEqual({ ok: true });
   });
 
-  test("rejects a pasted passage", () => {
-    const pasted = checkProgress({ ...base, elapsedMs: 400, nextChars: 120 });
-    expect(pasted).toEqual({ ok: false, reason: "impossible_speed" });
+  test("rejects a pasted block of text", () => {
+    expect(checkProgress({ ...base, elapsedMs: 400, nextChars: 600 })).toEqual({
+      ok: false,
+      reason: "impossible_speed",
+    });
   });
 
-  test("rejects a client claiming an impossible finish time", () => {
-    const claim = checkProgress({
-      ...base,
-      previousChars: 119,
-      nextChars: 120,
-      elapsedMs: 200,
+  test("rejects a client claiming an impossible minute", () => {
+    // 1200 characters is a real 240 WPM minute; claiming it in two seconds is not.
+    expect(checkProgress({ ...base, elapsedMs: 2_000, nextChars: 1_200 })).toEqual({
+      ok: false,
+      reason: "impossible_speed",
     });
-    expect(claim).toEqual({ ok: false, reason: "impossible_speed" });
   });
 
   test("allows the grace window on the very first report", () => {
@@ -88,14 +121,21 @@ describe("checkProgress", () => {
     });
   });
 
-  test("refuses to go backwards or past the end", () => {
+  test("a whole minute at the ceiling is still accepted", () => {
+    const most = PROGRESS_GRACE_CHARS + (RACE_DURATION_MS / 1000) * MAX_CHARS_PER_SECOND;
+    expect(checkProgress({ ...base, elapsedMs: RACE_DURATION_MS, nextChars: most })).toEqual({
+      ok: true,
+    });
+  });
+
+  test("refuses to go backwards or past the end of the stream", () => {
     expect(checkProgress({ ...base, previousChars: 50, nextChars: 49 })).toEqual({
       ok: false,
       reason: "regressed",
     });
-    expect(checkProgress({ ...base, nextChars: 121, elapsedMs: 600_000 })).toEqual({
+    expect(checkProgress({ ...base, nextChars: STREAM_LENGTH + 1, elapsedMs: 600_000 })).toEqual({
       ok: false,
-      reason: "beyond_passage",
+      reason: "beyond_stream",
     });
     expect(checkProgress({ ...base, previousErrors: 3, nextErrors: 1 })).toEqual({
       ok: false,
@@ -107,10 +147,9 @@ describe("checkProgress", () => {
     expect(checkProgress({ ...base, nextChars: 10.5 }).ok).toBe(false);
   });
 
-  test("cumulative check catches a jump split across reports", () => {
+  test("the cumulative check catches a jump split across reports", () => {
     // Two 60-char reports 100ms apart: each delta looks small, the total does not.
-    const first = checkProgress({ ...base, elapsedMs: 100, nextChars: 60 });
-    expect(first.ok).toBe(false);
+    expect(checkProgress({ ...base, elapsedMs: 100, nextChars: 60 }).ok).toBe(false);
   });
 });
 
@@ -120,73 +159,83 @@ describe("rankPlayers", () => {
     nickname: "p",
     correctChars: 100,
     errors: 0,
-    finishTimeMs: null,
     connected: true,
     ...over,
   });
 
-  test("orders finishers by server-measured time", () => {
+  test("the most correct characters wins the minute", () => {
     const ranked = rankPlayers(
       [
-        entry({ playerId: "b", nickname: "Bia", finishTimeMs: 31_000 }),
-        entry({ playerId: "a", nickname: "Ana", finishTimeMs: 30_000 }),
+        entry({ playerId: "b", nickname: "Bia", correctChars: 280 }),
+        entry({ playerId: "a", nickname: "Ana", correctChars: 341 }),
       ],
-      31_000,
+      RACE_DURATION_MS,
     );
     expect(ranked.map((r) => r.playerId)).toEqual(["a", "b"]);
     expect(ranked.map((r) => r.rank)).toEqual([1, 2]);
   });
 
-  test("a photo finish is decided by accuracy, not by packet order", () => {
+  test("one character decides it, however close the minute was", () => {
     const ranked = rankPlayers(
       [
-        entry({ playerId: "sloppy", nickname: "Ana", finishTimeMs: 30_000, errors: 7 }),
-        entry({ playerId: "clean", nickname: "Bia", finishTimeMs: 30_001, errors: 0 }),
+        entry({ playerId: "a", nickname: "Ana", correctChars: 300, errors: 0 }),
+        entry({ playerId: "b", nickname: "Bia", correctChars: 301, errors: 40 }),
       ],
-      30_001,
+      RACE_DURATION_MS,
     );
-    // One millisecond apart: the clock still decides, it is a real difference.
-    expect(ranked.map((r) => r.playerId)).toEqual(["sloppy", "clean"]);
-
-    const dead = rankPlayers(
-      [
-        entry({ playerId: "sloppy", nickname: "Ana", finishTimeMs: 30_000, errors: 7 }),
-        entry({ playerId: "clean", nickname: "Bia", finishTimeMs: 30_000, errors: 0 }),
-      ],
-      30_000,
-    );
-    expect(dead.map((r) => r.playerId)).toEqual(["clean", "sloppy"]);
-    expect(dead.map((r) => r.rank)).toEqual([1, 2]);
+    expect(ranked[0]?.playerId).toBe("b");
   });
 
-  test("a true tie shares the rank and pushes the next one down", () => {
+  test("a dead heat on characters is broken by accuracy", () => {
     const ranked = rankPlayers(
       [
-        entry({ playerId: "a", nickname: "Ana", finishTimeMs: 20_000, errors: 1 }),
-        entry({ playerId: "b", nickname: "Bia", finishTimeMs: 20_000, errors: 1 }),
-        entry({ playerId: "c", nickname: "Caio", finishTimeMs: 25_000 }),
+        entry({ playerId: "sloppy", nickname: "Ana", correctChars: 300, errors: 22 }),
+        entry({ playerId: "clean", nickname: "Bia", correctChars: 300, errors: 3 }),
       ],
-      25_000,
+      RACE_DURATION_MS,
+    );
+    expect(ranked.map((r) => r.playerId)).toEqual(["clean", "sloppy"]);
+    expect(ranked.map((r) => r.rank)).toEqual([1, 2]);
+  });
+
+  test("identical on both numbers is a real tie and shares the rank", () => {
+    const ranked = rankPlayers(
+      [
+        entry({ playerId: "a", nickname: "Ana", correctChars: 300, errors: 4 }),
+        entry({ playerId: "b", nickname: "Bia", correctChars: 300, errors: 4 }),
+        entry({ playerId: "c", nickname: "Caio", correctChars: 120 }),
+      ],
+      RACE_DURATION_MS,
     );
     expect(ranked.map((r) => r.rank)).toEqual([1, 1, 3]);
   });
 
-  test("unfinished players come after finishers, ordered by progress", () => {
-    const ranked = rankPlayers(
-      [
-        entry({ playerId: "quit", nickname: "Ana", correctChars: 10, connected: false }),
-        entry({ playerId: "slow", nickname: "Bia", correctChars: 80 }),
-        entry({ playerId: "done", nickname: "Caio", correctChars: 120, finishTimeMs: 40_000 }),
-      ],
-      40_000,
-    );
-    expect(ranked.map((r) => r.playerId)).toEqual(["done", "slow", "quit"]);
+  test("the order never depends on which report arrived first", () => {
+    const players = [
+      entry({ playerId: "a", nickname: "Ana", correctChars: 300, errors: 4 }),
+      entry({ playerId: "b", nickname: "Bia", correctChars: 300, errors: 9 }),
+    ];
+    const forwards = rankPlayers(players, RACE_DURATION_MS).map((r) => r.playerId);
+    const backwards = rankPlayers([...players].reverse(), RACE_DURATION_MS).map((r) => r.playerId);
+    expect(forwards).toEqual(backwards);
   });
 
-  test("scores an unfinished player over the full race duration", () => {
+  test("a player who dropped keeps the characters they typed", () => {
     const ranked = rankPlayers(
-      [entry({ playerId: "a", correctChars: 250, errors: 50, finishTimeMs: null })],
-      60_000,
+      [
+        entry({ playerId: "quit", nickname: "Ana", correctChars: 90, connected: false }),
+        entry({ playerId: "here", nickname: "Bia", correctChars: 60 }),
+      ],
+      RACE_DURATION_MS,
+    );
+    // Leaving does not forfeit: they simply stopped adding characters.
+    expect(ranked.map((r) => r.playerId)).toEqual(["quit", "here"]);
+  });
+
+  test("scores everyone over the same minute", () => {
+    const ranked = rankPlayers(
+      [entry({ playerId: "a", correctChars: 250, errors: 50 })],
+      RACE_DURATION_MS,
     );
     expect(ranked[0]?.wpm).toBe(50);
     expect(ranked[0]?.accuracy).toBeCloseTo(83.3, 1);

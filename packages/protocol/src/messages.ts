@@ -69,11 +69,9 @@ export const playerSnapshotSchema = z.object({
   spectator: z.boolean(),
   correctChars: z.number(),
   errors: z.number(),
-  /** 0..1, ready to be used directly as a progress bar width. */
-  progress: z.number(),
   wpm: z.number(),
   accuracy: z.number(),
-  finishTimeMs: z.number().nullable(),
+  /** Live position during the race, not only at the end: being passed is the whole tension. */
   rank: z.number().nullable(),
 });
 export type PlayerSnapshot = z.infer<typeof playerSnapshotSchema>;
@@ -82,9 +80,10 @@ export const roomSnapshotSchema = z.object({
   code: roomCodeSchema,
   phase: racePhaseSchema,
   hostId: z.string().nullable(),
-  passage: z.string().nullable(),
-  /** Absolute server instant the race starts, in epoch ms. Null outside a countdown. */
+  /** Absolute server instant the race starts, in epoch ms. Null outside a race. */
   startAt: z.number().nullable(),
+  /** Absolute server instant the minute is up. Clients render the clock from this. */
+  endsAt: z.number().nullable(),
   endedAt: z.number().nullable(),
   players: z.array(playerSnapshotSchema),
   /** Server clock at the moment this snapshot was built, used by clients to fix their offset. */
@@ -113,6 +112,12 @@ export const serverMessageSchema = z.discriminatedUnion("type", [
     serverTime: z.number(),
   }),
   z.object({ type: z.literal("state"), room: roomSnapshotSchema }),
+  /**
+   * The text for one race: a few kilobytes, identical for everyone in the room, and constant
+   * for the whole minute. It travels on its own message because `state` is broadcast several
+   * times a second and there is no reason to resend the words with every frame.
+   */
+  z.object({ type: z.literal("race_text"), stream: z.string() }),
   z.object({ type: z.literal("pong"), clientTime: z.number(), serverTime: z.number() }),
   z.object({
     type: z.literal("error"),

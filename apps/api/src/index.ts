@@ -48,6 +48,24 @@ function broadcastRoom(room: Room, now = Date.now()): void {
   }
 }
 
+/**
+ * The words for the current race. Sent on its own, and only when it changes: joining
+ * mid-race, and the moment a countdown starts.
+ */
+function sendRaceText(connection: Connection, room: Room): void {
+  if (room.stream === null) return;
+  send(connection, { type: "race_text", stream: room.stream });
+}
+
+function broadcastRaceText(room: Room): void {
+  const ids = roomConnections.get(room.code);
+  if (!ids || room.stream === null) return;
+  for (const id of ids) {
+    const connection = connections.get(id);
+    if (connection) sendRaceText(connection, room);
+  }
+}
+
 function attach(socketId: string, code: string): void {
   const set = roomConnections.get(code) ?? new Set<string>();
   set.add(socketId);
@@ -160,6 +178,9 @@ const app = new Elysia()
           spectator: result.value.spectator,
           serverTime: now,
         });
+        // Before the snapshot: a spectator dropped into a running race needs the words in
+        // hand by the time they are told a race is running.
+        sendRaceText(connection, room);
         broadcastRoom(room, now);
         return;
       }
@@ -213,6 +234,7 @@ const app = new Elysia()
         }
         return;
       }
+      if (message.type === "start_race") broadcastRaceText(room);
       broadcastRoom(room, now);
     },
     close(ws) {

@@ -1,10 +1,19 @@
 /**
  * Race rules shared by server and client.
  *
- * The server is the only authority: it recomputes WPM, accuracy and ranking from the
- * progress reports it accepts. The client imports the same functions purely so the live
- * counters it shows match what the server will end up publishing.
+ * The server is the only authority: it recomputes WPM, accuracy and the ranking from the
+ * progress reports it accepts, on its own clock. The client imports the same functions purely
+ * so the live counters it shows match what the server will end up publishing.
  */
+
+/**
+ * A race is a fixed minute for everyone.
+ *
+ * Nobody "finishes" — the text never ends — so the race is decided by how far each player got
+ * before the clock ran out. A fixed duration also means every race is comparable, which is
+ * what makes a personal best worth keeping.
+ */
+export const RACE_DURATION_MS = 60_000;
 
 /** Standard typing convention: a "word" is 5 characters, whitespace included. */
 export const CHARS_PER_WORD = 5;
@@ -24,14 +33,13 @@ export const MAX_CHARS_PER_SECOND = 25;
  * Progress reports are batched (we do not send one message per keystroke) and the client
  * clock is only roughly aligned with the server's, so the very first report of a race can
  * legitimately look faster than a human. A fixed allowance absorbs that without opening a
- * hole big enough to paste a passage through.
+ * hole big enough to paste a paragraph through.
  */
 export const PROGRESS_GRACE_CHARS = 12;
 
 export type ProgressRejection =
-  | "not_racing"
   | "regressed"
-  | "beyond_passage"
+  | "beyond_stream"
   | "errors_regressed"
   | "impossible_speed";
 
@@ -42,7 +50,7 @@ export type ProgressCandidate = {
   nextChars: number;
   previousErrors: number;
   nextErrors: number;
-  passageLength: number;
+  streamLength: number;
   elapsedMs: number;
 };
 
@@ -50,18 +58,18 @@ export type ProgressCandidate = {
  * Validates a progress report against the previous accepted one.
  *
  * The speed check is cumulative (from the race start, not from the previous report) on
- * purpose: checking each delta in isolation would let a cheater drip-feed a large jump
- * across several messages and still finish in an impossible total time.
+ * purpose: checking each delta in isolation would let a cheater drip-feed a large jump across
+ * several messages and still end the minute with an impossible total.
  */
 export function checkProgress(candidate: ProgressCandidate): ProgressCheck {
-  const { previousChars, nextChars, previousErrors, nextErrors, passageLength, elapsedMs } =
+  const { previousChars, nextChars, previousErrors, nextErrors, streamLength, elapsedMs } =
     candidate;
 
   if (!Number.isInteger(nextChars) || !Number.isInteger(nextErrors)) {
     return { ok: false, reason: "regressed" };
   }
   if (nextChars < previousChars) return { ok: false, reason: "regressed" };
-  if (nextChars > passageLength) return { ok: false, reason: "beyond_passage" };
+  if (nextChars > streamLength) return { ok: false, reason: "beyond_stream" };
   if (nextErrors < previousErrors) return { ok: false, reason: "errors_regressed" };
   if (elapsedMs < 0) return { ok: false, reason: "impossible_speed" };
 
@@ -81,8 +89,8 @@ export function computeWpm(correctChars: number, elapsedMs: number): number {
 /**
  * Accuracy as a percentage of keystrokes that landed on the right character.
  *
- * A player who has not typed anything yet is shown 100 rather than 0 so the race screen
- * does not open on a discouraging number.
+ * A player who has not typed anything yet is shown 100 rather than 0 so the race screen does
+ * not open on a discouraging number.
  */
 export function computeAccuracy(correctChars: number, errors: number): number {
   const total = correctChars + errors;
@@ -95,8 +103,6 @@ export type RankableEntry = {
   nickname: string;
   correctChars: number;
   errors: number;
-  /** Milliseconds from the race start to the last character, or null if unfinished. */
-  finishTimeMs: number | null;
   connected: boolean;
 };
 
@@ -107,14 +113,17 @@ export type RankedEntry = RankableEntry & {
 };
 
 /**
- * Final ranking.
+ * The ranking, used both live during the minute and for the final result.
  *
- * Finishers come first, ordered by finish time. A dead heat down to the millisecond is
- * broken by accuracy (fewer errors wins) rather than by arrival order of the WebSocket
- * frames, which would make the result depend on network luck. If two players are still
- * identical after that they genuinely tie and share the same rank number, so a 1-1-3 podium
- * is possible. Players who never finished (including anyone who dropped) are ranked after
- * the finishers by how far they got, so a disconnect costs the race but not the placing.
+ * Most correct characters wins, because that is the only thing the whole minute was spent on.
+ * A dead heat on characters is broken by accuracy: between two players who typed exactly as
+ * much, the one who hit fewer wrong keys did the better minute. Only when both numbers match
+ * is it a real tie, and then the two share a rank, so a 1-1-3 podium is possible.
+ *
+ * Nothing here looks at who reported first: two players finishing the minute within
+ * milliseconds of each other must not have the result decided by network luck. Disconnected
+ * players stay in the ranking with the progress they had, so dropping out costs the race but
+ * does not erase the minute.
  */
 export function rankPlayers(entries: readonly RankableEntry[], elapsedMs: number): RankedEntry[] {
   const sorted = [...entries].sort(compareEntries);
@@ -125,11 +134,10 @@ export function rankPlayers(entries: readonly RankableEntry[], elapsedMs: number
     const previous = sorted[index - 1];
     const tied = previous !== undefined && isDeadHeat(previous, entry);
     currentRank = tied ? currentRank : index + 1;
-    const duration = entry.finishTimeMs ?? elapsedMs;
     ranked.push({
       ...entry,
       rank: currentRank,
-      wpm: computeWpm(entry.correctChars, duration),
+      wpm: computeWpm(entry.correctChars, elapsedMs),
       accuracy: computeAccuracy(entry.correctChars, entry.errors),
     });
   });
@@ -138,25 +146,15 @@ export function rankPlayers(entries: readonly RankableEntry[], elapsedMs: number
 }
 
 function compareEntries(a: RankableEntry, b: RankableEntry): number {
-  const aFinished = a.finishTimeMs !== null;
-  const bFinished = b.finishTimeMs !== null;
-  if (aFinished !== bFinished) return aFinished ? -1 : 1;
-  if (aFinished && bFinished) {
-    const byTime = (a.finishTimeMs as number) - (b.finishTimeMs as number);
-    if (byTime !== 0) return byTime;
-  } else {
-    const byProgress = b.correctChars - a.correctChars;
-    if (byProgress !== 0) return byProgress;
-  }
+  const byProgress = b.correctChars - a.correctChars;
+  if (byProgress !== 0) return byProgress;
   const byErrors = a.errors - b.errors;
   if (byErrors !== 0) return byErrors;
   return a.nickname.localeCompare(b.nickname, "pt-BR");
 }
 
 function isDeadHeat(a: RankableEntry, b: RankableEntry): boolean {
-  return (
-    a.finishTimeMs === b.finishTimeMs && a.correctChars === b.correctChars && a.errors === b.errors
-  );
+  return a.correctChars === b.correctChars && a.errors === b.errors;
 }
 
 function round(value: number, decimals: number): number {
