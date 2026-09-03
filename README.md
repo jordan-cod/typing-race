@@ -67,14 +67,25 @@ everything with its own clock, validates each report against the previous one, a
 WPM, accuracy and the ranking itself. A rejected report leaves the stored progress untouched,
 so a client claiming to have finished in 300ms simply does not move.
 
-**Errors are strict: you must fix them.** A wrong character never advances the player. It goes
-into a small buffer shown in red, and only Backspace clears it. The alternative — letting
-errors through and only docking accuracy — makes the player's position and the passage drift
-apart, and leaves the server unable to tell an honest mistake from a client quietly skipping
-characters. Every wrong keystroke also counts against accuracy, so a mistake costs both time
-and percentage. Correct characters can never be taken back, which keeps progress monotonic.
-Once 8 wrong characters are pending, further keys are ignored instead of counted, so leaning
-on a key does not destroy the accuracy score.
+**Errors are strict, and the passage never changes.** A wrong character does not advance the
+player, and it is never spliced into the text on screen. Instead the character they *should*
+have typed is marked in the error colour, in place, and a Backspace clears the block.
+
+This follows what the platforms people already know do. Monkeytype colours the expected
+character red and never shows the glyph you actually hit; TypeRacer refuses to advance until
+the word matches. Both keep the passage still, and for the same reason: it is the thing the
+player is reading from. Splicing wrong letters into it reflows every following word at the
+exact moment the player is trying to find their place again.
+
+One Backspace clears a whole streak of wrong keys, not one press per mistake — there is
+nothing on screen to erase, so counting presses against something invisible would be
+guesswork. Wrong keys stop counting against accuracy after `MAX_WRONG_STREAK`, so leaning on
+a key does not destroy the score. Correct characters can never be taken back, which keeps
+progress monotonic and matching what the server accepts.
+
+The alternative — letting errors through and only docking accuracy — is rejected because the
+player's position and the passage would drift apart, leaving the server unable to tell an
+honest mistake from a client quietly skipping characters.
 
 **Paste is blocked twice.** The typing field discards `paste` and `drop` events and ignores
 keystrokes with Ctrl/Cmd held, and the server independently rejects any progress faster than

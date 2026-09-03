@@ -1,31 +1,40 @@
 type Props = {
   passage: string;
   correctChars: number;
-  pending: string;
+  hasError: boolean;
 };
 
 /**
- * The passage with three zones: what is already typed, the wrong characters waiting to be
- * erased, and what is left. Rendering the pending mistakes inline makes it obvious why the
- * cursor stopped moving.
+ * The passage, never rewritten.
+ *
+ * A mistake marks the character the player *should* have typed, in place, instead of showing
+ * the character they actually hit. That is how Monkeytype does it, and the reason is practical:
+ * the text is what the player is reading from, so it has to stay still. Splicing the wrong
+ * letters into it moves every following word sideways at the exact moment the player is trying
+ * to find their place again.
  */
-export function PassageView({ passage, correctChars, pending }: Props) {
+export function PassageView({ passage, correctChars, hasError }: Props) {
   const done = passage.slice(0, correctChars);
-  const rest = passage.slice(correctChars);
-  const nextChar = rest.slice(0, 1);
+  const current = passage.slice(correctChars, correctChars + 1);
+  const rest = passage.slice(correctChars + 1);
 
   return (
     <p className="font-mono text-xl leading-relaxed tracking-wide break-words whitespace-pre-wrap">
       <span className="text-accent">{done}</span>
-      {pending.length > 0 && (
-        <span className="rounded-sm bg-danger/30 text-danger underline decoration-danger">
-          {pending}
+      {current.length > 0 && (
+        <span
+          className={
+            hasError
+              ? "animate-error-shake rounded-sm bg-danger text-canvas"
+              : "rounded-sm bg-ink/85 text-canvas"
+          }
+        >
+          {/* A space is the character to type as often as any letter, and an empty
+              highlight would look like the cursor vanished. */}
+          {current === " " ? " " : current}
         </span>
       )}
-      {pending.length === 0 && nextChar.length > 0 && (
-        <span className="rounded-sm bg-ink/85 text-canvas">{nextChar}</span>
-      )}
-      <span className="text-muted">{pending.length === 0 ? rest.slice(1) : rest}</span>
+      <span className="text-muted">{rest}</span>
     </p>
   );
 }

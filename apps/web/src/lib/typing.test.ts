@@ -1,12 +1,12 @@
 import { describe, expect, test } from "vitest";
-import { applyKey, applyKeys, initialTypingState, isBlocked, MAX_PENDING } from "./typing.ts";
+import { applyKey, applyKeys, initialTypingState, isBlocked, MAX_WRONG_STREAK } from "./typing.ts";
 
 const PASSAGE = "ola mundo";
 
 describe("applyKey", () => {
   test("advances one character at a time", () => {
     const state = applyKeys(initialTypingState, ["o", "l", "a"], PASSAGE);
-    expect(state).toEqual({ correctChars: 3, errors: 0, pending: "" });
+    expect(state).toEqual({ correctChars: 3, errors: 0, wrongStreak: 0 });
   });
 
   test("a wrong character does not advance and blocks the input", () => {
@@ -20,12 +20,28 @@ describe("applyKey", () => {
     const state = applyKeys(initialTypingState, ["o", "x", "l"], PASSAGE);
     expect(state.correctChars).toBe(1);
     expect(state.errors).toBe(2);
-    expect(state.pending).toBe("xl");
+    expect(state.wrongStreak).toBe(2);
   });
 
   test("backspace clears the mistake and typing resumes", () => {
     const state = applyKeys(initialTypingState, ["o", "x", "Backspace", "l", "a"], PASSAGE);
-    expect(state).toEqual({ correctChars: 3, errors: 1, pending: "" });
+    expect(state).toEqual({ correctChars: 3, errors: 1, wrongStreak: 0 });
+  });
+
+  // There is nothing on screen to erase, so counting one Backspace per wrong key would be
+  // counting presses against something invisible.
+  test("one backspace clears a whole streak of wrong keys", () => {
+    const state = applyKeys(initialTypingState, ["o", "x", "y", "z", "Backspace"], PASSAGE);
+    expect(isBlocked(state)).toBe(false);
+    expect(state.errors).toBe(3);
+    expect(applyKey(state, "l", PASSAGE).correctChars).toBe(2);
+  });
+
+  // The passage must read the same before and after a mistake: the model carries a count,
+  // never the characters the player actually hit.
+  test("keeps no record of what was typed wrong", () => {
+    const state = applyKeys(initialTypingState, ["o", "x", "y"], PASSAGE);
+    expect(Object.values(state).every((value) => typeof value === "number")).toBe(true);
   });
 
   test("backspace never gives back a correct character", () => {
@@ -33,11 +49,11 @@ describe("applyKey", () => {
     expect(applyKey(typed, "Backspace", PASSAGE)).toBe(typed);
   });
 
-  test("stops counting errors once the buffer is full", () => {
-    const wrong = Array.from({ length: MAX_PENDING + 5 }, () => "x");
+  test("stops counting errors once the streak is long enough", () => {
+    const wrong = Array.from({ length: MAX_WRONG_STREAK + 5 }, () => "x");
     const state = applyKeys(initialTypingState, wrong, PASSAGE);
-    expect(state.errors).toBe(MAX_PENDING);
-    expect(state.pending).toHaveLength(MAX_PENDING);
+    expect(state.errors).toBe(MAX_WRONG_STREAK);
+    expect(state.wrongStreak).toBe(MAX_WRONG_STREAK);
   });
 
   test("ignores control keys and accepts accented characters", () => {

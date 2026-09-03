@@ -9,6 +9,22 @@
   --color-accent: oklch(0.78 0.16 152);
   --color-danger: oklch(0.68 0.18 22);
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --animate-error-shake: error-shake 0.12s ease-in-out 2;
+}
+
+/* Short and small on purpose: enough to register as "that was wrong" without moving the
+   text the player is reading. */
+@keyframes error-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-2px);
+  }
+  75% {
+    transform: translateX(2px);
+  }
 }
 
 html,

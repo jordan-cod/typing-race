@@ -2,7 +2,13 @@ import type { ClientMessage, RoomSnapshot } from "@typing-race/protocol";
 import { computeAccuracy, computeWpm } from "@typing-race/protocol";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { formatNumber } from "../lib/format.ts";
-import { applyKey, initialTypingState, isComplete, type TypingState } from "../lib/typing.ts";
+import {
+  applyKey,
+  initialTypingState,
+  isBlocked,
+  isComplete,
+  type TypingState,
+} from "../lib/typing.ts";
 import { PassageView } from "./PassageView.tsx";
 import { PlayerLane } from "./PlayerLane.tsx";
 
@@ -117,7 +123,7 @@ export function RaceScreen({ room, selfId, send, serverNow }: Props) {
         <PassageView
           passage={passage}
           correctChars={typing.correctChars}
-          pending={typing.pending}
+          hasError={isBlocked(typing)}
         />
       </button>
 
@@ -143,8 +149,8 @@ export function RaceScreen({ room, selfId, send, serverNow }: Props) {
             // biome-ignore lint/a11y/noAutofocus: the race starts the instant this appears.
             autoFocus
           />
-          {typing.pending.length > 0 && (
-            <span className="text-danger">Apague o erro para continuar</span>
+          {isBlocked(typing) && (
+            <span className="text-danger">Tecla errada. Apague para continuar.</span>
           )}
           {done && <span className="text-accent">Voce terminou. Aguardando os outros.</span>}
           {!focused && !done && (
