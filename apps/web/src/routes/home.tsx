@@ -60,103 +60,88 @@ function Home() {
   }
 
   return (
-    <div className="space-y-12">
-      {/* The hero is the thing itself: a line of the stream being typed, caret and all. */}
+    <div className="space-y-14">
+      {/* O herói é a coisa em si: uma linha sendo digitada, cursor e tudo. O resto da página
+          fica menor do que ela de propósito — quem chega aqui já entende o jogo antes de ler
+          qualquer frase explicando. */}
       <div>
-        <p className="stream text-2xl leading-relaxed break-words text-paper sm:text-3xl">
+        <p className="stream text-3xl leading-[1.35] break-words text-paper sm:text-5xl">
           {typed}
           <span
-            className="ml-0.5 inline-block h-[1.1em] w-[2px] translate-y-[0.18em] bg-signal"
+            className="ml-0.5 inline-block h-[1.05em] w-[3px] translate-y-[0.18em] bg-signal"
             style={reduced ? undefined : { animation: "miss-shake 0s" }}
           />
-          <span className="text-dim">{DEMO.slice(typed.length)}</span>
-        </p>
-        <p className="mt-5 max-w-lg text-dim">
-          Chame alguém e todo mundo recebe o mesmo texto no mesmo instante. Ganha quem digitar mais
-          caracteres certos. Sozinho, vale contra o seu recorde.
+          <span className="text-ink-700">{DEMO.slice(typed.length)}</span>
         </p>
       </div>
 
-      <div className="border-t border-ink-700" />
+      <div className="max-w-lg space-y-7">
+        {/* Sem rótulo em cima: o campo diz o que quer dentro dele, e os botões dizem o que
+            fazem. Uma etiqueta acima de cada bloco transforma a entrada de um jogo numa tela
+            de configuração. */}
+        <input
+          className="w-full border-b border-ink-800 bg-transparent pb-3 text-3xl outline-none transition-colors placeholder:text-ink-700 focus:border-signal"
+          value={nickname}
+          onChange={(event) => setNickname(event.target.value)}
+          maxLength={NICKNAME_MAX_LENGTH}
+          placeholder="seu apelido"
+          aria-label="Seu apelido"
+        />
 
-      <div className="max-w-md space-y-8">
-        <label className="block space-y-2">
-          <span className="text-sm text-dim">seu apelido</span>
-          <input
-            className="w-full border-b border-ink-700 bg-transparent pb-2 text-2xl outline-none focus:border-signal"
-            value={nickname}
-            onChange={(event) => setNickname(event.target.value)}
-            maxLength={NICKNAME_MAX_LENGTH}
-            placeholder="como você aparece na sala"
-          />
-        </label>
-
-        <div className="space-y-6">
-          {/* O texto antes do botão: a escolha vale para a corrida que está prestes a começar,
-              e decidir depois de já ter começado é tarde. */}
-          <div className="space-y-2">
-            <span className="text-sm text-dim">o texto</span>
-            <div className="flex flex-wrap gap-2">
-              <Toggle on={accents} onClick={() => setAccents(!accents)}>
-                acentos
-              </Toggle>
-              <Toggle on={punctuation} onClick={() => setPunctuation(!punctuation)}>
-                pontuação
-              </Toggle>
-            </div>
-          </div>
-
-          {/* Duas maneiras de jogar, lado a lado. Treinar sozinho estava escondido numa frase
-              dentro da sala, como se fosse um consolo por não ter ninguém. */}
-          <div className="space-y-2">
-            <span className="text-sm text-dim">como jogar</span>
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <button
-                type="button"
-                onClick={() => handleCreate(false)}
-                disabled={busy}
-                className="bg-signal px-8 py-3.5 font-display font-semibold whitespace-nowrap text-ink-900 disabled:opacity-50"
-              >
-                Com outras pessoas
-              </button>
-              <button
-                type="button"
-                onClick={() => handleCreate(true)}
-                disabled={busy}
-                className="border border-ink-700 px-8 py-3.5 font-display font-semibold whitespace-nowrap hover:border-paper disabled:opacity-50"
-              >
-                Sozinho
-              </button>
-            </div>
-          </div>
-
-          <form onSubmit={handleJoin} className="flex items-end gap-3">
-            <label className="flex-1 space-y-2">
-              <span className="text-sm text-dim">ou entre com um código</span>
-              <input
-                className="stream w-full border-b border-ink-700 bg-transparent pb-2 text-2xl tracking-[0.28em] uppercase outline-none focus:border-signal"
-                value={code}
-                onChange={(event) => setCode(event.target.value.toUpperCase())}
-                maxLength={ROOM_CODE_LENGTH}
-                placeholder="XXXX"
-              />
-            </label>
-            <button
-              type="submit"
-              disabled={busy}
-              className="border border-ink-700 px-6 py-3 font-display font-semibold hover:border-paper disabled:opacity-50"
-            >
-              Entrar
-            </button>
-          </form>
+        <div className="flex flex-wrap items-center gap-2">
+          <Toggle on={accents} onClick={() => setAccents(!accents)}>
+            acentos
+          </Toggle>
+          <Toggle on={punctuation} onClick={() => setPunctuation(!punctuation)}>
+            pontuação
+          </Toggle>
+          {!accents && !punctuation && (
+            <span className="text-sm text-ink-700">só letra e espaço</span>
+          )}
         </div>
 
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => handleCreate(false)}
+            disabled={busy}
+            className="bg-signal px-8 py-4 font-semibold whitespace-nowrap text-ink-900 transition-colors hover:bg-paper disabled:opacity-50"
+          >
+            Chamar alguém
+          </button>
+          <button
+            type="button"
+            onClick={() => handleCreate(true)}
+            disabled={busy}
+            className="border border-ink-800 px-8 py-4 font-semibold whitespace-nowrap transition-colors hover:border-paper disabled:opacity-50"
+          >
+            Jogar sozinho
+          </button>
+        </div>
+
+        {/* Entrar numa sala existente é uma frase, não um formulário: quem tem código já sabe
+            o que fazer com ele. */}
+        <form onSubmit={handleJoin} className="flex items-baseline gap-3 text-dim">
+          <span>Tem um código?</span>
+          <input
+            className="stream w-28 border-b border-ink-800 bg-transparent pb-1 text-lg tracking-[0.28em] text-paper uppercase outline-none transition-colors placeholder:text-ink-700 focus:border-signal"
+            value={code}
+            onChange={(event) => setCode(event.target.value.toUpperCase())}
+            maxLength={ROOM_CODE_LENGTH}
+            placeholder="XXXX"
+            aria-label="Código da sala"
+          />
+          <button
+            type="submit"
+            disabled={busy}
+            className="underline underline-offset-4 transition-colors hover:text-paper disabled:opacity-50"
+          >
+            entrar
+          </button>
+        </form>
+
         {error && <p className="text-miss">{error}</p>}
-        {best && (
-          <p className="text-sm text-dim">
-            Seu recorde neste navegador: {formatNumber(best.wpm)} ppm.
-          </p>
-        )}
+        {best && <p className="text-sm text-ink-700">Seu recorde: {formatNumber(best.wpm)} ppm.</p>}
       </div>
     </div>
   );
@@ -180,10 +165,13 @@ function Toggle({
       type="button"
       aria-pressed={on}
       onClick={onClick}
+      // Ligado é claro, desligado é contorno. O âmbar não entra aqui: nesta interface ele
+      // quer dizer "a ação principal", e gastá-lo num interruptor esvazia o significado dele
+      // no botão que importa.
       className={`px-4 py-2 text-sm transition-colors ${
         on
-          ? "bg-signal font-medium text-ink-900"
-          : "border border-ink-700 text-dim hover:border-paper hover:text-paper"
+          ? "bg-paper font-medium text-ink-900"
+          : "border border-ink-800 text-dim hover:border-paper hover:text-paper"
       }`}
     >
       {children}
