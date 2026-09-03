@@ -26,11 +26,11 @@ Ground is a deep petrol, not a tinted black: it has a real hue (205) and reads a
 chassis rather than "dark mode".
 
 ```
---ink-900  oklch(0.175 0.026 205)   ground
---ink-800  oklch(0.225 0.028 205)   raised
---ink-700  oklch(0.305 0.028 205)   hairlines
---paper    oklch(0.955 0.012 90)    the type you have already typed (warm against the ground)
---dim      oklch(0.545 0.022 205)   the type you have not reached yet
+--ink-900  oklch(0.208 0.038 204)   ground
+--ink-800  oklch(0.263 0.038 204)   raised
+--ink-700  oklch(0.350 0.036 204)   hairlines
+--paper    oklch(0.965 0.014 92)    the type you have already typed (warm against the ground)
+--dim      oklch(0.655 0.030 204)   the type you have not reached yet, and body copy
 --signal   oklch(0.795 0.150 75)    amber: live, primary action
 --best     oklch(0.680 0.190 300)   violet: fastest in the room
 --gain     oklch(0.760 0.150 155)   green: personal best

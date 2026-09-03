@@ -1,20 +1,38 @@
 @import "tailwindcss";
 
+/**
+ * A motorsport timing board.
+ *
+ * Colour is a convention here, not decoration: violet is the best in the room, green is your
+ * own record, amber is live, red is a miss. Nothing is coloured for looks, so anything that
+ * changes colour is worth looking at. The ground is a deep petrol with a real hue rather than
+ * a tinted black.
+ */
 @theme {
-  --color-canvas: oklch(0.17 0.02 265);
-  --color-surface: oklch(0.22 0.02 265);
-  --color-edge: oklch(0.32 0.02 265);
-  --color-ink: oklch(0.96 0.01 265);
-  --color-muted: oklch(0.68 0.02 265);
-  --color-accent: oklch(0.78 0.16 152);
-  --color-danger: oklch(0.68 0.18 22);
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --animate-error-shake: error-shake 0.12s ease-in-out 2;
+  --color-ink-900: oklch(0.208 0.038 204);
+  --color-ink-850: oklch(0.235 0.038 204);
+  --color-ink-800: oklch(0.263 0.038 204);
+  --color-ink-700: oklch(0.35 0.036 204);
+  --color-paper: oklch(0.965 0.014 92);
+  /* 4.6:1 on the ground: this carries real body copy, not just labels. */
+  --color-dim: oklch(0.655 0.03 204);
+  --color-signal: oklch(0.795 0.15 75);
+  --color-best: oklch(0.68 0.19 300);
+  --color-gain: oklch(0.76 0.15 155);
+  --color-miss: oklch(0.625 0.2 25);
+
+  --font-display: "Archivo Variable", "Archivo", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --animate-miss-shake: miss-shake 0.12s ease-in-out 2;
+  --animate-land: land 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  --animate-streak-pop: streak-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  --animate-word-pulse: word-pulse 0.45s ease-out;
 }
 
 /* Short and small on purpose: enough to register as "that was wrong" without moving the
    text the player is reading. */
-@keyframes error-shake {
+@keyframes miss-shake {
   0%,
   100% {
     transform: translateX(0);
@@ -27,6 +45,35 @@
   }
 }
 
+/* The minute ending should settle rather than cut. */
+@keyframes land {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes streak-pop {
+  50% {
+    transform: scale(1.14);
+  }
+}
+
+/* A finished word flashes and settles. Colour only, never size: the text the player is
+   reading has to stay exactly where it is. */
+@keyframes word-pulse {
+  from {
+    color: var(--color-signal);
+  }
+  to {
+    color: var(--color-paper);
+  }
+}
+
 html,
 body,
 #root {
@@ -34,6 +81,42 @@ body,
 }
 
 body {
-  background-color: var(--color-canvas);
-  color: var(--color-ink);
+  background-color: var(--color-ink-900);
+  color: var(--color-paper);
+  font-family: var(--font-display);
+  font-synthesis-weight: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* The stream is read under time pressure: no ligatures turning "ti" into a shape the eye has
+   to re-parse, and figures that never shift the layout as they count. */
+.stream {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+  font-feature-settings: "calt" 0;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-signal);
+  outline-offset: 3px;
+}
+
+/* The caret and the stream scroll are inline styles set from JS, so only !important can
+   override them from here. The components also read the preference directly, but this is the
+   backstop that covers anything added later and forgotten. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* biome-ignore lint/complexity/noImportantStyles: must beat inline styles */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must beat inline styles */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: must beat inline styles */
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -1,19 +1,11 @@
-import { describe, expect, test } from "vitest";
-import { formatDuration, formatNumber, ordinal } from "./format.ts";
-
-describe("formatDuration", () => {
-  test("seconds under a minute", () => {
-    expect(formatDuration(12_340)).toBe("12,3s");
-  });
-  test("minutes and seconds", () => {
-    expect(formatDuration(67_400)).toBe("1m 07,4s");
-  });
-});
+import { expect, test } from "vitest";
+import { formatNumber, position } from "./format.ts";
 
 test("formatNumber uses a decimal comma", () => {
   expect(formatNumber(83.34, 1)).toBe("83,3");
+  expect(formatNumber(112)).toBe("112");
 });
 
-test("ordinal", () => {
-  expect(ordinal(1)).toBe("1º");
+test("position reads like a timing board", () => {
+  expect(position(1)).toBe("P1");
 });

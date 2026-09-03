@@ -15,6 +15,8 @@ export type RaceConnection = {
   status: ConnectionStatus;
   playerId: string | null;
   room: RoomSnapshot | null;
+  /** The words for the current race. Arrives once per race on its own message. */
+  stream: string;
   error: RaceError | null;
   dismissError: () => void;
   send: (message: ClientMessage) => void;
@@ -28,6 +30,7 @@ export function useRace(code: string, nickname: string): RaceConnection {
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [room, setRoom] = useState<RoomSnapshot | null>(null);
+  const [stream, setStream] = useState("");
   const [error, setError] = useState<RaceError | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
@@ -59,6 +62,12 @@ export function useRace(code: string, nickname: string): RaceConnection {
           break;
         case "state":
           setRoom(message.room);
+          // Back in the lobby there is nothing to type, and holding the old stream would let
+          // a stale race screen render for a frame after a restart.
+          if (message.room.phase === "lobby") setStream("");
+          break;
+        case "race_text":
+          setStream(message.stream);
           break;
         case "pong": {
           // Keep the sample from the fastest round trip: it is the one where the assumption
@@ -107,8 +116,8 @@ export function useRace(code: string, nickname: string): RaceConnection {
   const dismissError = useCallback(() => setError(null), []);
 
   return useMemo(
-    () => ({ status, playerId, room, error, dismissError, send, serverNow }),
-    [status, playerId, room, error, dismissError, send, serverNow],
+    () => ({ status, playerId, room, stream, error, dismissError, send, serverNow }),
+    [status, playerId, room, stream, error, dismissError, send, serverNow],
   );
 }
 
