@@ -5,7 +5,7 @@ FROM oven/bun:1.3.13-alpine AS build
 WORKDIR /app
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
-COPY package.json bun.lock ./
+COPY package.json bun.lock tsconfig.base.json ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/protocol/package.json packages/protocol/

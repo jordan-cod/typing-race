@@ -2,7 +2,7 @@
 # workspace, e um contexto menor deixaria os dois de fora.
 FROM oven/bun:1.3.13-alpine AS deps
 WORKDIR /app
-COPY package.json bun.lock ./
+COPY package.json bun.lock tsconfig.base.json ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/protocol/package.json packages/protocol/
@@ -12,7 +12,7 @@ FROM oven/bun:1.3.13-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=deps /app/node_modules node_modules
-COPY package.json bun.lock ./
+COPY package.json bun.lock tsconfig.base.json ./
 COPY packages/protocol packages/protocol
 COPY apps/api apps/api
 
