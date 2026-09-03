@@ -1,4 +1,4 @@
-import { createRoute, Link, redirect } from "@tanstack/react-router";
+import { createRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import {
   NICKNAME_MAX_LENGTH,
   ROOM_CODE_LENGTH,
@@ -67,6 +67,13 @@ function ConnectedRoom({
     code,
     nickname,
   );
+  const navigate = useNavigate();
+
+  // Sair é só ir embora: desmontar fecha o socket, e o servidor já sabe o que fazer com quem
+  // sai — some do lobby, e no meio de uma corrida a pista fica com o que a pessoa digitou.
+  const onLeave = useCallback(() => {
+    navigate({ to: "/" });
+  }, [navigate]);
   const reduced = usePrefersReducedMotion();
 
   const keyboard = useMemo(() => new Keyboard(), []);
@@ -228,6 +235,22 @@ function ConnectedRoom({
           reduced={reduced}
           onPlayAgain={() => send({ type: "play_again" })}
         />
+      )}
+
+      {/* Sair fica no rodapé da sala, e não junto do botão de começar: é a saída, não uma
+          das ações do jogo. Durante a corrida ela some — quem quer sair no meio de um minuto
+          fecha a aba, e um botão de abandonar ao lado do texto é um clique de arrependimento
+          esperando acontecer. */}
+      {room.phase !== "racing" && room.phase !== "countdown" && (
+        <div className="border-t border-ink-700 pt-5">
+          <button
+            type="button"
+            onClick={onLeave}
+            className="text-sm text-dim underline underline-offset-4 hover:text-paper"
+          >
+            Sair da sala
+          </button>
+        </div>
       )}
     </div>
   );
