@@ -21,9 +21,15 @@ RUN cd apps/web && bun run build
 FROM caddy:2-alpine
 COPY --from=build /app/apps/web/dist /srv
 
-# Porta alta de propósito. O binário do Caddy carrega a capacidade de abrir
-# portas privilegiadas no próprio arquivo, e com `cap_drop: ALL` mais
-# `no-new-privileges` o kernel recusa até executá-lo. Acima de 1024 ninguém
-# precisa de capacidade nenhuma, e quem fala com o mundo é o proxy.
+# O binário do Caddy vem com a capacidade de abrir portas privilegiadas gravada
+# no próprio arquivo. Com `cap_drop: ALL` e `no-new-privileges`, o kernel recusa
+# *executar* um arquivo assim — não é o bind que falha, é o exec, e o container
+# reinicia para sempre com "operation not permitted". Tirar a capacidade
+# resolve, e ela não faz falta: quem abre 80 e 443 na máquina é o proxy.
+RUN apk add --no-cache libcap \
+ && setcap -r /usr/bin/caddy \
+ && apk del libcap
+
+# Porta alta pelo mesmo motivo: acima de 1024 ninguém precisa de capacidade.
 RUN printf ':8080 {\n\troot * /srv\n\ttry_files {path} /index.html\n\tfile_server\n\tencode zstd gzip\n}\n' > /etc/caddy/Caddyfile
 EXPOSE 8080
