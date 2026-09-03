@@ -283,44 +283,65 @@ function Lobby({
     setTimeout(() => setCopied(false), 2000);
   }
 
+  const link = `${typeof window === "undefined" ? "" : window.location.host}/${room.code}`;
+
   return (
-    <div className="space-y-8">
-      <header className="space-y-2">
-        <p className="text-sm text-dim">Chame alguém com este código</p>
-        <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-          <span className="stream text-5xl font-medium tracking-[0.28em] text-signal">
-            {room.code}
-          </span>
-          <button
-            type="button"
-            onClick={copyLink}
-            className="text-sm text-dim underline underline-offset-4 hover:text-paper"
-          >
-            {copied ? "link copiado" : "copiar link"}
-          </button>
+    <div className="space-y-10">
+      {/* A placa de pit: no automobilismo é a placa erguida sobre o muro, com caracteres
+          enormes porque é lida de longe e a 200 por hora. O código da sala é a mesma coisa —
+          alguém grita ele do outro lado da mesa ou dita no telefone. Então ele é o objeto
+          maior da tela, e o resto fica quieto em volta. */}
+      <div className="bg-ink-850 px-6 py-7 text-center sm:px-10">
+        <div className="stream text-6xl leading-none font-medium tracking-[0.22em] text-signal sm:text-8xl">
+          {/* O último caractere carrega o tracking e desloca o centro óptico. */}
+          <span className="-mr-[0.22em]">{room.code}</span>
         </div>
-      </header>
 
-      <div className="border-t border-ink-700" />
+        {/* O endereço inteiro, à vista: é isso que a pessoa digita do outro lado, e escondê-lo
+            atrás de um botão obriga quem está com o telefone na mão a confiar na área de
+            transferência. */}
+        <button
+          type="button"
+          onClick={copyLink}
+          className="stream mt-4 text-sm text-dim underline decoration-ink-700 underline-offset-[6px] transition-colors hover:text-paper hover:decoration-signal"
+        >
+          {copied ? "link copiado" : link}
+        </button>
+      </div>
 
-      <ul className="space-y-3">
-        {room.players.map((player) => (
-          <li key={player.id} className="flex items-baseline justify-between gap-4">
-            <span className={player.id === selfId ? "text-paper" : "text-dim"}>
+      {/* O grid de largada. A numeração é informação de verdade aqui: é a ordem em que as
+          pistas aparecem na corrida, não enfeite. */}
+      <ol className="space-y-px">
+        {room.players.map((player, index) => (
+          <li key={player.id} className="flex items-baseline gap-5 bg-ink-850/40 px-5 py-4">
+            <span className="stream tnum w-5 shrink-0 text-sm text-dim">{index + 1}</span>
+            <span
+              className={`min-w-0 flex-1 truncate text-lg ${player.id === selfId ? "text-paper" : "text-dim"}`}
+            >
               {player.nickname}
-              {player.id === selfId && " (você)"}
-              {player.isHost && <span className="ml-3 text-sm text-dim">criou a sala</span>}
+              {player.id === selfId && <span className="ml-2 text-sm text-dim">você</span>}
             </span>
-            {!player.isHost && (
-              <span className={player.ready ? "text-sm text-gain" : "text-sm text-dim"}>
-                {player.ready ? "pronto" : "aguardando"}
-              </span>
-            )}
+            <span className="shrink-0 text-sm">
+              {player.isHost ? (
+                <span className="text-dim">criou a sala</span>
+              ) : (
+                <span className={player.ready ? "text-gain" : "text-dim"}>
+                  {player.ready ? "pronto" : "aguardando"}
+                </span>
+              )}
+            </span>
           </li>
         ))}
-      </ul>
 
-      <div className="border-t border-ink-700" />
+        {/* A vaga vazia diz que a sala está esperando alguém, coisa que uma lista de um nome
+            só não diz. */}
+        {alone && (
+          <li className="flex items-baseline gap-4 border border-dashed border-ink-800 px-5 py-3.5">
+            <span className="stream tnum w-5 shrink-0 text-sm text-ink-700">2</span>
+            <span className="flex-1 text-lg text-ink-700">esperando alguém entrar</span>
+          </li>
+        )}
+      </ol>
 
       <div className="space-y-4">
         {self?.isHost ? (
@@ -329,7 +350,9 @@ function Lobby({
               type="button"
               onClick={() => onStart(false)}
               disabled={!podeComecar}
-              className="w-full bg-signal py-3.5 font-display font-semibold text-ink-900 disabled:bg-ink-800 disabled:text-dim sm:w-auto sm:px-10"
+              // Desabilitado ele vira contorno, não uma laje cinza: um botão que não faz nada
+              // não pode ser a coisa mais pesada da tela.
+              className="w-full py-4 text-lg font-semibold transition-colors enabled:bg-signal enabled:text-ink-900 enabled:hover:bg-paper disabled:border disabled:border-ink-800 disabled:text-ink-700"
             >
               Começar corrida
             </button>
@@ -345,15 +368,15 @@ function Lobby({
             )}
             {alone && (
               <p className="text-sm text-dim">
-                Ninguém mais na sala.{" "}
+                Sozinho dá para{" "}
                 <button
                   type="button"
                   onClick={() => onStart(true)}
-                  className="text-paper underline underline-offset-4"
+                  className="text-paper underline underline-offset-4 hover:text-signal"
                 >
-                  Treinar sozinho
-                </button>{" "}
-                vale como treino, não como corrida.
+                  treinar
+                </button>
+                , mas treino não vale como corrida.
               </p>
             )}
           </>
@@ -361,9 +384,13 @@ function Lobby({
           <button
             type="button"
             onClick={() => onReady(!self?.ready)}
-            className="w-full border border-ink-700 py-3.5 font-display font-semibold hover:border-paper sm:w-auto sm:px-10"
+            className={`w-full py-4 text-lg font-semibold transition-colors ${
+              self?.ready
+                ? "bg-gain text-ink-900 hover:bg-paper"
+                : "border border-ink-700 text-paper hover:border-paper"
+            }`}
           >
-            {self?.ready ? "Não estou pronto" : "Estou pronto"}
+            {self?.ready ? "Estou pronto" : "Marcar que estou pronto"}
           </button>
         )}
 
