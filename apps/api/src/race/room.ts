@@ -98,6 +98,20 @@ export class Room {
     );
     if (taken) return fail("nickname_taken", "Esse apelido ja esta em uso na sala");
 
+    // Voltar com o mesmo apelido e reconectar, nao entrar de novo. Sem isto, quem cai no meio
+    // da corrida reaparece como um segundo jogador e deixa a propria pista orfa na tela dos
+    // outros, com o progresso que ja tinha feito preso nela.
+    const anterior = [...this.players.values()].find(
+      (player) => !player.connected && player.nickname.toLowerCase() === nickname.toLowerCase(),
+    );
+    if (anterior) {
+      this.players.delete(anterior.id);
+      const voltou: Player = { ...anterior, id, connected: true };
+      this.players.set(id, voltou);
+      if (this.hostId === anterior.id) this.hostId = id;
+      return succeed(voltou);
+    }
+
     // A race already under way is joined as a spectator: dropping someone into a minute the
     // others started 40 seconds ago would only produce a rigged ranking.
     const spectator = this.phase !== "lobby";
@@ -156,6 +170,20 @@ export class Room {
     if (racers.length === 0) return fail("not_enough_players", "Ninguem na sala");
     if (racers.length === 1 && !solo) {
       return fail("not_enough_players", "Chame mais alguem para correr");
+    }
+
+    // Quem cria a sala nao marca "pronto": comecar a corrida e o pronto dele. Todo o resto
+    // precisa ter dito que esta, senao a largada acontece por cima de quem ainda estava
+    // ajeitando o teclado — e num minuto cronometrado isso decide a corrida.
+    const esperando = racers.filter((player) => player.id !== id && !player.ready);
+    if (esperando.length > 0) {
+      const nomes = esperando.map((player) => player.nickname).join(", ");
+      return fail(
+        "not_ready",
+        esperando.length === 1
+          ? `${nomes} ainda nao esta pronto`
+          : `Ainda nao estao prontos: ${nomes}`,
+      );
     }
 
     // Built once, here, and handed to everyone: the room races the same words or it is not a

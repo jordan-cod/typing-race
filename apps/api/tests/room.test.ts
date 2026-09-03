@@ -14,8 +14,15 @@ function roomWithTwo(): Room {
   return room;
 }
 
-function startedRoom(): Room {
+/** Ana criou a sala, então só a Bia precisa dizer que está pronta. */
+function roomReadyToStart(): Room {
   const room = roomWithTwo();
+  room.setReady("bia", true);
+  return room;
+}
+
+function startedRoom(): Room {
+  const room = roomReadyToStart();
   room.start("ana", T0, false);
   room.tick(RACE_START);
   return room;
@@ -89,6 +96,7 @@ describe("the stream", () => {
     });
     room.join("ana", "Ana");
     room.join("bia", "Bia");
+    room.setReady("bia", true);
     room.start("ana", T0, false);
     const first = room.stream;
     room.tick(RACE_START);
@@ -101,7 +109,7 @@ describe("the stream", () => {
 
 describe("countdown", () => {
   test("the start instant comes from the server clock", () => {
-    const room = roomWithTwo();
+    const room = roomReadyToStart();
     room.start("ana", T0, false);
     expect(room.startAt).toBe(RACE_START);
     expect(room.endsAt).toBe(RACE_END);
@@ -109,7 +117,7 @@ describe("countdown", () => {
   });
 
   test("racing begins only once the instant is reached", () => {
-    const room = roomWithTwo();
+    const room = roomReadyToStart();
     room.start("ana", T0, false);
     expect(room.tick(RACE_START - 1)).toBe(false);
     expect(room.phase).toBe("countdown");
@@ -323,5 +331,98 @@ describe("registry", () => {
     const room = registry.create(T0);
     expect(registry.sweep(T0 + 60_000)).toEqual([]);
     expect(registry.sweep(T0 + 10 * 60_000)).toEqual([room.code]);
+  });
+});
+
+describe("everybody ready", () => {
+  test("the host cannot start over someone who has not said they are ready", () => {
+    const room = roomWithTwo();
+
+    const result = room.start("ana", T0, false);
+
+    expect(result.ok).toBe(false);
+    expect(room.phase).toBe("lobby");
+  });
+
+  test("the refusal names who is missing, so the host knows who to chase", () => {
+    const room = roomWithTwo();
+    room.join("caio", "Caio");
+
+    const result = room.start("ana", T0, false);
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("Bia");
+    if (!result.ok) expect(result.message).toContain("Caio");
+  });
+
+  // Starting is the host's way of saying they are ready; asking them to click twice would be
+  // ceremony.
+  test("the host does not have to mark themselves ready", () => {
+    const room = roomReadyToStart();
+
+    expect(room.start("ana", T0, false).ok).toBe(true);
+  });
+
+  test("someone who unreadies blocks the start again", () => {
+    const room = roomReadyToStart();
+    room.setReady("bia", false);
+
+    expect(room.start("ana", T0, false).ok).toBe(false);
+  });
+
+  // Ready is about who is racing. A player who dropped cannot click anything.
+  test("a disconnected player does not hold the room hostage", () => {
+    const room = roomReadyToStart();
+    room.join("caio", "Caio");
+    room.leave("caio");
+
+    expect(room.start("ana", T0, false).ok).toBe(true);
+  });
+});
+
+describe("coming back", () => {
+  test("returning with the same nickname reclaims the lane, not a second one", () => {
+    const room = startedRoom();
+    room.applyProgress("bia", 40, 2, RACE_START + 20_000);
+    room.leave("bia");
+
+    const result = room.join("bia-2", "Bia");
+
+    expect(result.ok).toBe(true);
+    expect(
+      room.snapshot(RACE_START + 21_000).players.filter((p) => p.nickname === "Bia"),
+    ).toHaveLength(1);
+  });
+
+  test("the characters already typed come back with the player", () => {
+    const room = startedRoom();
+    room.applyProgress("bia", 40, 2, RACE_START + 20_000);
+    room.leave("bia");
+    room.join("bia-2", "Bia");
+
+    const bia = room.snapshot(RACE_START + 21_000).players.find((p) => p.nickname === "Bia");
+
+    expect(bia?.correctChars).toBe(40);
+    expect(bia?.connected).toBe(true);
+  });
+
+  // O comando passa adiante quando o dono cai, e voltar não o arranca de volta: a sala
+  // continuou funcionando com outra pessoa no comando, e trocar de novo no meio seria pior.
+  test("the host role passes on when they drop, and coming back does not take it back", () => {
+    const room = startedRoom();
+    room.leave("ana");
+    expect(room.hostId).toBe("bia");
+
+    room.join("ana-2", "Ana");
+
+    expect(room.hostId).toBe("bia");
+    expect(room.getPlayer("ana-2")?.connected).toBe(true);
+  });
+
+  // Two people on the same wifi are two players, not one reconnecting.
+  test("a nickname still connected is still refused", () => {
+    const room = roomWithTwo();
+
+    expect(room.join("outro", "Bia").ok).toBe(false);
   });
 });

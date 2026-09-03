@@ -99,6 +99,7 @@ export const errorCodeSchema = z.enum([
   "not_joined",
   "not_host",
   "not_enough_players",
+  "not_ready",
   "wrong_phase",
   "progress_rejected",
 ]);

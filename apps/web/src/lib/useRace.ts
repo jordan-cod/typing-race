@@ -13,6 +13,8 @@ export type RaceError = { code: ErrorCode; message: string; fatal: boolean };
 
 export type RaceConnection = {
   status: ConnectionStatus;
+  /** Try again now, instead of waiting out the backoff. */
+  reconnect: () => void;
   playerId: string | null;
   room: RoomSnapshot | null;
   /** The words for the current race. Arrives once per race on its own message. */
@@ -26,6 +28,14 @@ export type RaceConnection = {
 
 const PING_INTERVAL_MS = 4_000;
 
+/**
+ * Reconnection backoff. A dropped socket used to be the end of the session: the screen said
+ * "conexão perdida" and offered nothing, so a two-second wifi blip cost the race. The first
+ * retry is almost immediate because most drops are exactly that blip; the delay grows so a
+ * server that is actually down is not hammered.
+ */
+const RETRY_DELAYS_MS = [400, 1_000, 2_000, 4_000, 8_000];
+
 export function useRace(code: string, nickname: string): RaceConnection {
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [playerId, setPlayerId] = useState<string | null>(null);
@@ -36,12 +46,21 @@ export function useRace(code: string, nickname: string): RaceConnection {
   const socketRef = useRef<WebSocket | null>(null);
   const offsetRef = useRef(0);
   const bestRttRef = useRef(Number.POSITIVE_INFINITY);
+  const [attempt, setAttempt] = useState(0);
+
+  const reconnect = useCallback(() => {
+    // Bumping the attempt re-runs the effect below, which is what opens a new socket.
+    socketRef.current?.close();
+    setAttempt((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     if (!nickname) return;
+    setStatus("connecting");
     const socket = new WebSocket(websocketUrl());
     socketRef.current = socket;
     let pingTimer: ReturnType<typeof setInterval> | undefined;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
     const ping = () => socket.send(JSON.stringify({ type: "ping", clientTime: Date.now() }));
 
@@ -86,18 +105,23 @@ export function useRace(code: string, nickname: string): RaceConnection {
       }
     };
 
+    // The server puts a player who left back where they were when they return with the same
+    // nickname, so retrying is enough to restore the lane and the characters already typed.
     socket.onclose = () => {
       setStatus("closed");
       if (pingTimer) clearInterval(pingTimer);
+      const delay = RETRY_DELAYS_MS[Math.min(attempt, RETRY_DELAYS_MS.length - 1)] ?? 8_000;
+      retryTimer = setTimeout(() => setAttempt((current) => current + 1), delay);
     };
 
     return () => {
       if (pingTimer) clearInterval(pingTimer);
+      if (retryTimer) clearTimeout(retryTimer);
       socket.onclose = null;
       socket.close();
       socketRef.current = null;
     };
-  }, [code, nickname]);
+  }, [code, nickname, attempt]);
 
   // Non-fatal errors are transient notices, not state: they clear themselves so the screen
   // does not keep an old complaint on it forever.
@@ -116,8 +140,8 @@ export function useRace(code: string, nickname: string): RaceConnection {
   const dismissError = useCallback(() => setError(null), []);
 
   return useMemo(
-    () => ({ status, playerId, room, stream, error, dismissError, send, serverNow }),
-    [status, playerId, room, stream, error, dismissError, send, serverNow],
+    () => ({ status, reconnect, playerId, room, stream, error, dismissError, send, serverNow }),
+    [status, reconnect, playerId, room, stream, error, dismissError, send, serverNow],
   );
 }
 

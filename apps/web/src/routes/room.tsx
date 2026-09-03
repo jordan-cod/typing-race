@@ -44,7 +44,10 @@ function ConnectedRoom({
   nickname: string;
   onChangeNickname: (nickname: string) => void;
 }) {
-  const { status, playerId, room, stream, error, send, serverNow } = useRace(code, nickname);
+  const { status, reconnect, playerId, room, stream, error, send, serverNow } = useRace(
+    code,
+    nickname,
+  );
   const reduced = usePrefersReducedMotion();
 
   const keyboard = useMemo(() => new Keyboard(), []);
@@ -116,18 +119,45 @@ function ConnectedRoom({
     return (
       <div className="space-y-5">
         <Notice tone="miss">{error.message}</Notice>
-        <Link to="/" className="text-signal underline underline-offset-4">
-          Voltar ao início
-        </Link>
+        <div className="flex flex-wrap items-center gap-5">
+          <button
+            type="button"
+            onClick={reconnect}
+            className="bg-signal px-6 py-2.5 font-display font-semibold text-ink-900"
+          >
+            Tentar entrar de novo
+          </button>
+          <Link to="/" className="text-dim underline underline-offset-4 hover:text-paper">
+            Voltar ao início
+          </Link>
+        </div>
       </div>
     );
   }
   if (!room) {
-    return <Notice>{status === "closed" ? "Conexão perdida." : "Conectando…"}</Notice>;
+    return status === "closed" ? (
+      <div className="space-y-5">
+        {/* A tentativa automática já está correndo; o botão é para quem não quer esperar. */}
+        <Notice tone="miss">Conexão perdida. Tentando voltar…</Notice>
+        <button
+          type="button"
+          onClick={reconnect}
+          className="bg-signal px-6 py-2.5 font-display font-semibold text-ink-900"
+        >
+          Tentar agora
+        </button>
+      </div>
+    ) : (
+      <Notice>Conectando…</Notice>
+    );
   }
 
   return (
     <div className="space-y-6">
+      {status === "closed" && (
+        <Notice tone="miss">Conexão perdida. Tentando voltar para a sala…</Notice>
+      )}
+
       {error && !error.fatal && error.code !== "progress_rejected" && (
         <Notice tone="miss">{error.message}</Notice>
       )}
@@ -201,6 +231,9 @@ function Lobby({
   const self = room.players.find((player) => player.id === selfId);
   const present = room.players.filter((player) => player.connected);
   const alone = present.length < 2;
+  // Quem criou a sala não marca "pronto": começar é o pronto dele.
+  const faltam = present.filter((player) => !player.isHost && !player.ready);
+  const podeComecar = !alone && faltam.length === 0;
 
   async function copyLink() {
     await navigator.clipboard.writeText(`${window.location.origin}/sala/${room.code}`);
@@ -253,11 +286,21 @@ function Lobby({
             <button
               type="button"
               onClick={() => onStart(false)}
-              disabled={alone}
+              disabled={!podeComecar}
               className="w-full bg-signal py-3.5 font-display font-semibold text-ink-900 disabled:bg-ink-800 disabled:text-dim sm:w-auto sm:px-10"
             >
               Começar corrida
             </button>
+
+            {/* Um botão desabilitado sem motivo é uma parede. Diz quem falta, pelo nome, para
+                o dono da sala saber de quem cobrar em vez de ficar clicando. */}
+            {!alone && faltam.length > 0 && (
+              <p className="text-sm text-dim">
+                {faltam.length === 1
+                  ? `Esperando ${faltam[0]?.nickname} ficar pronto.`
+                  : `Esperando ${faltam.map((player) => player.nickname).join(", ")} ficarem prontos.`}
+              </p>
+            )}
             {alone && (
               <p className="text-sm text-dim">
                 Ninguém mais na sala.{" "}
