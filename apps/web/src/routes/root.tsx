@@ -8,7 +8,7 @@ export const rootRoute = createRootRoute({
           to="/"
           className="stream text-sm tracking-[0.2em] text-dim transition-colors hover:text-paper"
         >
-          corrida<span className="text-signal">.</span>
+          typing<span className="text-signal">.</span>
         </Link>
       </header>
       <main className="flex-1">

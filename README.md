@@ -1,4 +1,4 @@
-# Corrida de digitação
+# Typing
 
 Multiplayer typing race. Two or more people enter a room, get the same endless text, start at
 the same server-decided instant and type for sixty seconds. Whoever gets the most correct

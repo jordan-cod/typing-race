@@ -22,13 +22,19 @@ function Home() {
 
   const trimmed = nickname.trim();
 
-  async function handleCreate() {
+  // `solo` sai daqui como busca na URL porque a sala só existe depois da chamada à API: a
+  // tela seguinte lê isso e larga a corrida sozinha, sem passar pela espera de ninguém.
+  async function handleCreate(solo: boolean) {
     if (trimmed.length < 2) return setError("Escolha um apelido primeiro");
     setBusy(true);
     setError(null);
     try {
       saveNickname(trimmed);
-      navigate({ to: "/$code", params: { code: await createRoom() } });
+      navigate({
+        to: "/$code",
+        params: { code: await createRoom() },
+        search: solo ? { solo: true } : {},
+      });
     } catch {
       setError("Não foi possível criar a sala");
       setBusy(false);
@@ -63,8 +69,8 @@ function Home() {
           <span className="text-dim">{DEMO.slice(typed.length)}</span>
         </p>
         <p className="mt-5 max-w-lg text-dim">
-          Corrida de digitação para duas ou mais pessoas. Todo mundo recebe o mesmo texto e começa
-          no mesmo instante. Ganha quem digitar mais caracteres certos.
+          Um minuto para digitar o máximo que der. Chame alguém e todo mundo recebe o mesmo texto no
+          mesmo instante, ou treine sozinho contra o seu recorde.
         </p>
       </div>
 
@@ -83,14 +89,26 @@ function Home() {
         </label>
 
         <div className="space-y-5">
-          <button
-            type="button"
-            onClick={handleCreate}
-            disabled={busy}
-            className="w-full bg-signal py-3.5 font-display font-semibold text-ink-900 disabled:opacity-50 sm:w-auto sm:px-10"
-          >
-            Criar sala
-          </button>
+          {/* Duas maneiras de jogar, lado a lado. Treinar sozinho estava escondido numa frase
+              dentro da sala, como se fosse um consolo por não ter ninguém. */}
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => handleCreate(false)}
+              disabled={busy}
+              className="bg-signal py-3.5 font-display font-semibold text-ink-900 disabled:opacity-50 sm:px-10"
+            >
+              Criar sala
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCreate(true)}
+              disabled={busy}
+              className="border border-ink-700 py-3.5 font-display font-semibold hover:border-paper disabled:opacity-50 sm:px-10"
+            >
+              Treinar sozinho
+            </button>
+          </div>
 
           <form onSubmit={handleJoin} className="flex items-end gap-3">
             <label className="flex-1 space-y-2">

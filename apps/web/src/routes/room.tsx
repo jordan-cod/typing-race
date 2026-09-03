@@ -24,6 +24,7 @@ import { rootRoute } from "./root.tsx";
 
 function RoomPage() {
   const { code } = roomRoute.useParams();
+  const { solo = false } = roomRoute.useSearch();
   const [nickname, setNickname] = useState(loadNickname);
 
   // Na raiz só existem a home e um código de sala, então qualquer outra coisa é um código
@@ -47,6 +48,7 @@ function RoomPage() {
   return (
     <ConnectedRoom
       key={nickname}
+      soloRequested={solo}
       code={normalized.data}
       nickname={nickname}
       onChangeNickname={setNickname}
@@ -55,10 +57,12 @@ function RoomPage() {
 }
 
 function ConnectedRoom({
+  soloRequested,
   code,
   nickname,
   onChangeNickname,
 }: {
+  soloRequested: boolean;
   code: string;
   nickname: string;
   onChangeNickname: (nickname: string) => void;
@@ -190,6 +194,7 @@ function ConnectedRoom({
 
       {room.phase === "lobby" && (
         <Lobby
+          soloRequested={soloRequested}
           room={room}
           selfId={playerId}
           personalBest={personalBest}
@@ -260,22 +265,35 @@ function Lobby({
   room,
   selfId,
   personalBest,
+  soloRequested,
   onStart,
   onReady,
 }: {
   room: RoomSnapshot;
   selfId: string | null;
   personalBest: PersonalBest | null;
+  soloRequested: boolean;
   onStart: (solo: boolean) => void;
   onReady: (ready: boolean) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const self = room.players.find((player) => player.id === selfId);
+  const jaLargou = useRef(false);
   const present = room.players.filter((player) => player.connected);
   const alone = present.length < 2;
   // Quem criou a sala não marca "pronto": começar é o pronto dele.
   const faltam = present.filter((player) => !player.isHost && !player.ready);
   const podeComecar = !alone && faltam.length === 0;
+
+  // Quem clicou em "Treinar sozinho" na home já disse o que queria; passar pelo lobby para
+  // clicar de novo seria pedir a mesma coisa duas vezes. Uma vez só: se a pessoa sair do
+  // treino e voltar para a sala, ela decide de novo.
+  useEffect(() => {
+    if (!soloRequested || jaLargou.current) return;
+    if (!self?.isHost || room.players.filter((player) => player.connected).length > 1) return;
+    jaLargou.current = true;
+    onStart(true);
+  }, [soloRequested, self?.isHost, room.players, onStart]);
 
   async function copyLink() {
     await navigator.clipboard.writeText(`${window.location.origin}/${room.code}`);
@@ -367,17 +385,16 @@ function Lobby({
               </p>
             )}
             {alone && (
-              <p className="text-sm text-dim">
-                Sozinho dá para{" "}
+              <>
                 <button
                   type="button"
                   onClick={() => onStart(true)}
-                  className="text-paper underline underline-offset-4 hover:text-signal"
+                  className="w-full border border-ink-700 py-4 text-lg font-semibold transition-colors hover:border-paper"
                 >
-                  treinar
+                  Treinar sozinho
                 </button>
-                , mas treino não vale como corrida.
-              </p>
+                <p className="text-sm text-dim">Treino não entra no ranking da sala.</p>
+              </>
             )}
           </>
         ) : (
@@ -497,6 +514,8 @@ export const roomRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/$code",
   component: RoomPage,
+  validateSearch: (search: Record<string, unknown>): { solo?: boolean } =>
+    search.solo === true || search.solo === "true" ? { solo: true } : {},
 });
 
 /**
