@@ -5,11 +5,13 @@ FROM oven/bun:1.3.13-alpine AS build
 WORKDIR /app
 ARG VITE_API_URL
 ENV VITE_API_URL=$VITE_API_URL
+
 COPY package.json bun.lock tsconfig.base.json ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/protocol/package.json packages/protocol/
 RUN bun install --frozen-lockfile
+
 COPY packages/protocol packages/protocol
 COPY apps/web apps/web
 RUN cd apps/web && bun run build
@@ -18,5 +20,10 @@ RUN cd apps/web && bun run build
 # e devolve o index.html em qualquer rota, que é o que uma SPA precisa.
 FROM caddy:2-alpine
 COPY --from=build /app/apps/web/dist /srv
-RUN printf ':80 {\n\troot * /srv\n\ttry_files {path} /index.html\n\tfile_server\n\tencode zstd gzip\n}\n' > /etc/caddy/Caddyfile
-EXPOSE 80
+
+# Porta alta de propósito. O binário do Caddy carrega a capacidade de abrir
+# portas privilegiadas no próprio arquivo, e com `cap_drop: ALL` mais
+# `no-new-privileges` o kernel recusa até executá-lo. Acima de 1024 ninguém
+# precisa de capacidade nenhuma, e quem fala com o mundo é o proxy.
+RUN printf ':8080 {\n\troot * /srv\n\ttry_files {path} /index.html\n\tfile_server\n\tencode zstd gzip\n}\n' > /etc/caddy/Caddyfile
+EXPOSE 8080
