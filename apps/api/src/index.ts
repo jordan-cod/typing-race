@@ -1,8 +1,8 @@
 import { cors } from "@elysiajs/cors";
 import {
-  type ServerMessage,
   parseClientMessage,
   roomCodeSchema,
+  type ServerMessage,
   serverMessageSchema,
 } from "@typing-race/protocol";
 import { Elysia } from "elysia";
@@ -142,7 +142,12 @@ const app = new Elysia()
         }
         const result = room.join(ws.id, message.nickname);
         if (!result.ok) {
-          send(connection, { type: "error", code: result.code, message: result.message, fatal: true });
+          send(connection, {
+            type: "error",
+            code: result.code,
+            message: result.message,
+            fatal: true,
+          });
           connection.close();
           return;
         }

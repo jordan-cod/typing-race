@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import {
-  MAX_CHARS_PER_SECOND,
-  PROGRESS_GRACE_CHARS,
   checkProgress,
   computeAccuracy,
   computeWpm,
+  MAX_CHARS_PER_SECOND,
+  PROGRESS_GRACE_CHARS,
   rankPlayers,
 } from "@typing-race/protocol";
 

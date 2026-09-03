@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: oklch(0.17 0.02 265);
+  --color-surface: oklch(0.22 0.02 265);
+  --color-edge: oklch(0.32 0.02 265);
+  --color-ink: oklch(0.96 0.01 265);
+  --color-muted: oklch(0.68 0.02 265);
+  --color-accent: oklch(0.78 0.16 152);
+  --color-danger: oklch(0.68 0.18 22);
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-canvas);
+  color: var(--color-ink);
+}

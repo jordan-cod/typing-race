@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { COUNTDOWN_MS, MAX_PLAYERS_PER_ROOM, PASSAGES } from "@typing-race/protocol";
-import { RoomRegistry, generateRoomCode } from "../src/race/registry.ts";
+import { generateRoomCode, RoomRegistry } from "../src/race/registry.ts";
 import { FINISH_GRACE_MS, RACE_TIMEOUT_MS, Room } from "../src/race/room.ts";
 
 const T0 = 1_700_000_000_000;
@@ -206,8 +206,9 @@ describe("latecomers", () => {
       ok: false,
       code: "wrong_phase",
     });
-    expect(room.snapshot(T0 + COUNTDOWN_MS + 5_000).players.find((p) => p.id === "caio")?.rank)
-      .toBeNull();
+    expect(
+      room.snapshot(T0 + COUNTDOWN_MS + 5_000).players.find((p) => p.id === "caio")?.rank,
+    ).toBeNull();
   });
 
   test("a spectator becomes a racer in the next race", () => {

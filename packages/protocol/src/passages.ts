@@ -98,7 +98,10 @@ export const PASSAGES: readonly Passage[] = [
  * Picks a passage the room has not used yet, so "race again" never repeats until the whole
  * set is exhausted.
  */
-export function pickPassage(usedIds: readonly string[], random: () => number = Math.random): Passage {
+export function pickPassage(
+  usedIds: readonly string[],
+  random: () => number = Math.random,
+): Passage {
   const unused = PASSAGES.filter((passage) => !usedIds.includes(passage.id));
   const pool = unused.length > 0 ? unused : PASSAGES;
   const index = Math.floor(random() * pool.length);

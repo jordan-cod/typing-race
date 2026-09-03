@@ -2,7 +2,10 @@
   "name": "typing-race",
   "private": true,
   "type": "module",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "bun run --filter '*' --elide-lines 0 dev",
     "test": "bun run --filter '*' test",

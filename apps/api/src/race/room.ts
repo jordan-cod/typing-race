@@ -3,13 +3,13 @@ import {
   checkProgress,
   computeAccuracy,
   computeWpm,
-  MAX_PLAYERS_PER_ROOM,
   type ErrorCode,
+  MAX_PLAYERS_PER_ROOM,
   type Passage,
   type PlayerSnapshot,
+  pickPassage,
   type RacePhase,
   type RoomSnapshot,
-  pickPassage,
   rankPlayers,
 } from "@typing-race/protocol";
 
