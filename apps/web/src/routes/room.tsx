@@ -1,5 +1,10 @@
-import { createRoute, Link } from "@tanstack/react-router";
-import { NICKNAME_MAX_LENGTH, type RoomSnapshot, roomCodeSchema } from "@typing-race/protocol";
+import { createRoute, Link, redirect } from "@tanstack/react-router";
+import {
+  NICKNAME_MAX_LENGTH,
+  ROOM_CODE_LENGTH,
+  type RoomSnapshot,
+  roomCodeSchema,
+} from "@typing-race/protocol";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { RaceScreen } from "../components/RaceScreen.tsx";
 import { Result } from "../components/Result.tsx";
@@ -21,8 +26,22 @@ function RoomPage() {
   const { code } = roomRoute.useParams();
   const [nickname, setNickname] = useState(loadNickname);
 
+  // Na raiz só existem a home e um código de sala, então qualquer outra coisa é um código
+  // errado — e quem digitou precisa de uma saída, não só do diagnóstico.
   const normalized = roomCodeSchema.safeParse(code);
-  if (!normalized.success) return <Notice>Código de sala inválido.</Notice>;
+  if (!normalized.success) {
+    return (
+      <div className="space-y-5">
+        <Notice tone="miss">
+          <span className="stream">{code}</span> não parece um código de sala. São{" "}
+          {ROOM_CODE_LENGTH} caracteres, sem O, I, zero ou um.
+        </Notice>
+        <Link to="/" className="text-signal underline underline-offset-4">
+          Voltar ao início
+        </Link>
+      </div>
+    );
+  }
   if (!nickname) return <NicknameGate onConfirm={setNickname} />;
 
   return (
@@ -236,7 +255,7 @@ function Lobby({
   const podeComecar = !alone && faltam.length === 0;
 
   async function copyLink() {
-    await navigator.clipboard.writeText(`${window.location.origin}/sala/${room.code}`);
+    await navigator.clipboard.writeText(`${window.location.origin}/${room.code}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
@@ -417,8 +436,27 @@ function Notice({ children, tone = "dim" }: { children: React.ReactNode; tone?: 
   return <p className={tone === "miss" ? "text-miss" : "text-dim"}>{children}</p>;
 }
 
+/**
+ * The code lives at the root: `typing.jrdan.dev/WF6Q`.
+ *
+ * The link gets read out loud and typed by hand more often than it gets clicked, and every
+ * segment before the code is a segment someone has to say. The alphabet has no O, I, 0 or 1
+ * for the same reason.
+ */
 export const roomRoute = createRoute({
   getParentRoute: () => rootRoute,
-  path: "/sala/$code",
+  path: "/$code",
   component: RoomPage,
+});
+
+/**
+ * Where the code used to live. Links already shared keep working instead of landing on a
+ * "página não encontrada" that gives the sharer no idea what went wrong.
+ */
+export const legacyRoomRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/sala/$code",
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/$code", params, replace: true });
+  },
 });

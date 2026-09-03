@@ -4,11 +4,12 @@ import "@fontsource/ibm-plex-mono/500.css";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import { createRoot } from "react-dom/client";
 import { homeRoute } from "./routes/home.tsx";
-import { roomRoute } from "./routes/room.tsx";
+import { legacyRoomRoute, roomRoute } from "./routes/room.tsx";
 import { rootRoute } from "./routes/root.tsx";
 import "./styles.css";
 
-const routeTree = rootRoute.addChildren([homeRoute, roomRoute]);
+// A rota do código é curinga, então tudo que for específico precisa vir antes dela.
+const routeTree = rootRoute.addChildren([homeRoute, legacyRoomRoute, roomRoute]);
 const router = createRouter({ routeTree });
 
 declare module "@tanstack/react-router" {

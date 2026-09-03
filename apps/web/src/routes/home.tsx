@@ -28,7 +28,7 @@ function Home() {
     setError(null);
     try {
       saveNickname(trimmed);
-      navigate({ to: "/sala/$code", params: { code: await createRoom() } });
+      navigate({ to: "/$code", params: { code: await createRoom() } });
     } catch {
       setError("Não foi possível criar a sala");
       setBusy(false);
@@ -47,7 +47,7 @@ function Home() {
       return setError("Sala não encontrada");
     }
     saveNickname(trimmed);
-    navigate({ to: "/sala/$code", params: { code: parsed.data } });
+    navigate({ to: "/$code", params: { code: parsed.data } });
   }
 
   return (
