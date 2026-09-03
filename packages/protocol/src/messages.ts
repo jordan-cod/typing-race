@@ -44,6 +44,15 @@ export const clientMessageSchema = z.discriminatedUnion("type", [
      */
     solo: z.boolean().default(false),
   }),
+  /**
+   * O que o texto vai ter. Vive na sala, e não em cada jogador: correr contra alguém que está
+   * digitando outro texto não é correr contra ninguém.
+   */
+  z.object({
+    type: z.literal("set_text_options"),
+    accents: z.boolean(),
+    punctuation: z.boolean(),
+  }),
   z.object({
     type: z.literal("progress"),
     correctChars: z.int().min(0),
@@ -86,6 +95,8 @@ export const roomSnapshotSchema = z.object({
   endsAt: z.number().nullable(),
   endedAt: z.number().nullable(),
   players: z.array(playerSnapshotSchema),
+  /** O que o texto desta sala tem. Todo mundo vê, só quem criou a sala muda. */
+  textOptions: z.object({ accents: z.boolean(), punctuation: z.boolean() }),
   /** Server clock at the moment this snapshot was built, used by clients to fix their offset. */
   serverTime: z.number(),
 });

@@ -211,6 +211,11 @@ const app = new Elysia()
         switch (message.type) {
           case "set_ready":
             return room.setReady(playerId, message.ready);
+          case "set_text_options":
+            return room.setTextOptions(playerId, {
+              accents: message.accents,
+              punctuation: message.punctuation,
+            });
           case "start_race":
             return room.start(playerId, now, message.solo);
           case "progress":

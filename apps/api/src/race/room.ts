@@ -4,6 +4,7 @@ import {
   checkProgress,
   computeAccuracy,
   computeWpm,
+  DEFAULT_STREAM_OPTIONS,
   type ErrorCode,
   MAX_PLAYERS_PER_ROOM,
   type PlayerSnapshot,
@@ -11,6 +12,7 @@ import {
   type RacePhase,
   type RoomSnapshot,
   rankPlayers,
+  type StreamOptions,
 } from "@typing-race/protocol";
 
 /**
@@ -52,6 +54,7 @@ export class Room {
   readonly code: string;
   phase: RacePhase = "lobby";
   hostId: string | null = null;
+  textOptions: StreamOptions = { ...DEFAULT_STREAM_OPTIONS };
   stream: string | null = null;
   startAt: number | null = null;
   endedAt: number | null = null;
@@ -153,6 +156,13 @@ export class Room {
     return candidate?.id ?? null;
   }
 
+  setTextOptions(id: string, options: StreamOptions): RoomResult {
+    if (this.hostId !== id) return fail("not_host", "So quem criou a sala pode mudar o texto");
+    if (this.phase !== "lobby") return fail("wrong_phase", "A corrida ja comecou");
+    this.textOptions = { ...options };
+    return succeed(undefined);
+  }
+
   setReady(id: string, ready: boolean): RoomResult {
     const player = this.players.get(id);
     if (!player) return fail("not_joined", "Voce nao esta na sala");
@@ -188,7 +198,7 @@ export class Room {
 
     // Built once, here, and handed to everyone: the room races the same words or it is not a
     // race.
-    this.stream = buildStream(this.random);
+    this.stream = buildStream(this.random, this.textOptions);
     this.phase = "countdown";
     // An absolute instant, not a duration: every client races against the same server clock,
     // so a slow browser loses nothing more than the render of its own countdown.
@@ -329,6 +339,7 @@ export class Room {
       code: this.code,
       phase: this.phase,
       hostId: this.hostId,
+      textOptions: { ...this.textOptions },
       startAt: this.startAt,
       endsAt: this.endsAt,
       endedAt: this.endedAt,

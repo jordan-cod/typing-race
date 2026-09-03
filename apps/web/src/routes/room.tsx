@@ -24,7 +24,7 @@ import { rootRoute } from "./root.tsx";
 
 function RoomPage() {
   const { code } = roomRoute.useParams();
-  const { solo = false } = roomRoute.useSearch();
+  const { solo = false, accents, punctuation } = roomRoute.useSearch();
   const [nickname, setNickname] = useState(loadNickname);
 
   // Na raiz só existem a home e um código de sala, então qualquer outra coisa é um código
@@ -49,6 +49,11 @@ function RoomPage() {
     <ConnectedRoom
       key={nickname}
       soloRequested={solo}
+      requestedOptions={
+        accents === undefined && punctuation === undefined
+          ? null
+          : { accents: accents ?? true, punctuation: punctuation ?? true }
+      }
       code={normalized.data}
       nickname={nickname}
       onChangeNickname={setNickname}
@@ -58,11 +63,13 @@ function RoomPage() {
 
 function ConnectedRoom({
   soloRequested,
+  requestedOptions,
   code,
   nickname,
   onChangeNickname,
 }: {
   soloRequested: boolean;
+  requestedOptions: { accents: boolean; punctuation: boolean } | null;
   code: string;
   nickname: string;
   onChangeNickname: (nickname: string) => void;
@@ -195,6 +202,8 @@ function ConnectedRoom({
       {room.phase === "lobby" && (
         <Lobby
           soloRequested={soloRequested}
+          requestedOptions={requestedOptions}
+          onTextOptions={(options) => send({ type: "set_text_options", ...options })}
           room={room}
           selfId={playerId}
           personalBest={personalBest}
@@ -261,20 +270,54 @@ function ConnectedRoom({
   );
 }
 
+/**
+ * Uma opção do texto no lobby. Quem não criou a sala vê o estado mas não mexe: o texto é da
+ * corrida inteira, e mudar debaixo dos outros seria trocar a prova no meio.
+ */
+function OpcaoTexto({
+  on,
+  disabled,
+  onClick,
+  children,
+}: {
+  on: boolean;
+  disabled: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      disabled={disabled}
+      onClick={onClick}
+      className={`px-4 py-2 text-sm transition-colors ${
+        on ? "bg-signal font-medium text-ink-900" : "border border-ink-700 text-dim"
+      } ${disabled ? "cursor-default" : on ? "hover:bg-paper" : "hover:border-paper hover:text-paper"}`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function Lobby({
   room,
   selfId,
   personalBest,
   soloRequested,
+  requestedOptions,
   onStart,
   onReady,
+  onTextOptions,
 }: {
   room: RoomSnapshot;
   selfId: string | null;
   personalBest: PersonalBest | null;
   soloRequested: boolean;
+  requestedOptions: { accents: boolean; punctuation: boolean } | null;
   onStart: (solo: boolean) => void;
   onReady: (ready: boolean) => void;
+  onTextOptions: (options: { accents: boolean; punctuation: boolean }) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const self = room.players.find((player) => player.id === selfId);
@@ -284,6 +327,20 @@ function Lobby({
   // Quem criou a sala não marca "pronto": começar é o pronto dele.
   const faltam = present.filter((player) => !player.isHost && !player.ready);
   const podeComecar = !alone && faltam.length === 0;
+
+  // O que a pessoa escolheu na home chega aqui pela URL e vira estado da sala. Uma vez só:
+  // a partir daí quem manda é a sala, e reenviar sobrescreveria uma mudança feita no lobby.
+  const jaMandouOpcoes = useRef(false);
+  useEffect(() => {
+    if (!requestedOptions || jaMandouOpcoes.current || !self?.isHost) return;
+    jaMandouOpcoes.current = true;
+    if (
+      requestedOptions.accents !== room.textOptions.accents ||
+      requestedOptions.punctuation !== room.textOptions.punctuation
+    ) {
+      onTextOptions(requestedOptions);
+    }
+  }, [requestedOptions, self?.isHost, room.textOptions, onTextOptions]);
 
   // Quem clicou em "Treinar sozinho" na home já disse o que queria; passar pelo lobby para
   // clicar de novo seria pedir a mesma coisa duas vezes. Uma vez só: se a pessoa sair do
@@ -360,6 +417,32 @@ function Lobby({
           </li>
         )}
       </ol>
+
+      {/* O texto da sala fica à vista para todo mundo, não só para quem escolheu: quem entra
+          precisa saber se vai digitar com acento antes de dizer que está pronto. */}
+      <div className="space-y-2">
+        <span className="text-sm text-dim">o texto</span>
+        <div className="flex flex-wrap gap-2">
+          <OpcaoTexto
+            on={room.textOptions.accents}
+            disabled={!self?.isHost}
+            onClick={() =>
+              onTextOptions({ ...room.textOptions, accents: !room.textOptions.accents })
+            }
+          >
+            acentos
+          </OpcaoTexto>
+          <OpcaoTexto
+            on={room.textOptions.punctuation}
+            disabled={!self?.isHost}
+            onClick={() =>
+              onTextOptions({ ...room.textOptions, punctuation: !room.textOptions.punctuation })
+            }
+          >
+            pontuação
+          </OpcaoTexto>
+        </div>
+      </div>
 
       <div className="space-y-4">
         {self?.isHost ? (
@@ -514,8 +597,24 @@ export const roomRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/$code",
   component: RoomPage,
-  validateSearch: (search: Record<string, unknown>): { solo?: boolean } =>
-    search.solo === true || search.solo === "true" ? { solo: true } : {},
+  // A home manda o que escolheu antes da sala existir. `accents` e `punctuation` só valem
+  // para quem cria a sala; quem entra recebe o que a sala já decidiu.
+  validateSearch: (
+    search: Record<string, unknown>,
+  ): { solo?: boolean; accents?: boolean; punctuation?: boolean } => {
+    const bool = (valor: unknown) =>
+      valor === true || valor === "true"
+        ? true
+        : valor === false || valor === "false"
+          ? false
+          : undefined;
+
+    return {
+      ...(bool(search.solo) ? { solo: true } : {}),
+      ...(bool(search.accents) === undefined ? {} : { accents: bool(search.accents) }),
+      ...(bool(search.punctuation) === undefined ? {} : { punctuation: bool(search.punctuation) }),
+    };
+  },
 });
 
 /**

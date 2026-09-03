@@ -19,6 +19,9 @@ function Home() {
   const [busy, setBusy] = useState(false);
   const typed = useAutoType(DEMO, reduced);
   const [best] = useState(loadPersonalBest);
+  // Padrão nos dois ligados: as passagens são português de verdade, e é isso que vale treinar.
+  const [accents, setAccents] = useState(true);
+  const [punctuation, setPunctuation] = useState(true);
 
   const trimmed = nickname.trim();
 
@@ -33,7 +36,7 @@ function Home() {
       navigate({
         to: "/$code",
         params: { code: await createRoom() },
-        search: solo ? { solo: true } : {},
+        search: { accents, punctuation, ...(solo ? { solo: true } : {}) },
       });
     } catch {
       setError("Não foi possível criar a sala");
@@ -69,8 +72,8 @@ function Home() {
           <span className="text-dim">{DEMO.slice(typed.length)}</span>
         </p>
         <p className="mt-5 max-w-lg text-dim">
-          Um minuto para digitar o máximo que der. Chame alguém e todo mundo recebe o mesmo texto no
-          mesmo instante, ou treine sozinho contra o seu recorde.
+          Chame alguém e todo mundo recebe o mesmo texto no mesmo instante. Ganha quem digitar mais
+          caracteres certos. Sozinho, vale contra o seu recorde.
         </p>
       </div>
 
@@ -88,26 +91,43 @@ function Home() {
           />
         </label>
 
-        <div className="space-y-5">
+        <div className="space-y-6">
+          {/* O texto antes do botão: a escolha vale para a corrida que está prestes a começar,
+              e decidir depois de já ter começado é tarde. */}
+          <div className="space-y-2">
+            <span className="text-sm text-dim">o texto</span>
+            <div className="flex flex-wrap gap-2">
+              <Toggle on={accents} onClick={() => setAccents(!accents)}>
+                acentos
+              </Toggle>
+              <Toggle on={punctuation} onClick={() => setPunctuation(!punctuation)}>
+                pontuação
+              </Toggle>
+            </div>
+          </div>
+
           {/* Duas maneiras de jogar, lado a lado. Treinar sozinho estava escondido numa frase
               dentro da sala, como se fosse um consolo por não ter ninguém. */}
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={() => handleCreate(false)}
-              disabled={busy}
-              className="bg-signal py-3.5 font-display font-semibold text-ink-900 disabled:opacity-50 sm:px-10"
-            >
-              Criar sala
-            </button>
-            <button
-              type="button"
-              onClick={() => handleCreate(true)}
-              disabled={busy}
-              className="border border-ink-700 py-3.5 font-display font-semibold hover:border-paper disabled:opacity-50 sm:px-10"
-            >
-              Treinar sozinho
-            </button>
+          <div className="space-y-2">
+            <span className="text-sm text-dim">como jogar</span>
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <button
+                type="button"
+                onClick={() => handleCreate(false)}
+                disabled={busy}
+                className="bg-signal px-8 py-3.5 font-display font-semibold whitespace-nowrap text-ink-900 disabled:opacity-50"
+              >
+                Com outras pessoas
+              </button>
+              <button
+                type="button"
+                onClick={() => handleCreate(true)}
+                disabled={busy}
+                className="border border-ink-700 px-8 py-3.5 font-display font-semibold whitespace-nowrap hover:border-paper disabled:opacity-50"
+              >
+                Sozinho
+              </button>
+            </div>
           </div>
 
           <form onSubmit={handleJoin} className="flex items-end gap-3">
@@ -139,6 +159,35 @@ function Home() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Uma opção do texto. Ligada é sólida, desligada é contorno — o estado se lê de longe, sem
+ * precisar de rótulo dizendo "ligado".
+ */
+function Toggle({
+  on,
+  onClick,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={`px-4 py-2 text-sm transition-colors ${
+        on
+          ? "bg-signal font-medium text-ink-900"
+          : "border border-ink-700 text-dim hover:border-paper hover:text-paper"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 

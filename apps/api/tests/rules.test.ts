@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  applyOptions,
   buildStream,
   checkProgress,
   computeAccuracy,
   computeWpm,
+  DEFAULT_STREAM_OPTIONS,
   MAX_CHARS_PER_SECOND,
   PASSAGES,
   PROGRESS_GRACE_CHARS,
@@ -239,5 +241,48 @@ describe("rankPlayers", () => {
     );
     expect(ranked[0]?.wpm).toBe(50);
     expect(ranked[0]?.accuracy).toBeCloseTo(83.3, 1);
+  });
+});
+
+describe("o texto da corrida", () => {
+  const FRASE = "O café da manhã estava frio, mas ninguém reclamou!";
+
+  test("sem acento, as letras continuam as mesmas", () => {
+    expect(applyOptions(FRASE, { accents: false, punctuation: true })).toBe(
+      "O cafe da manha estava frio, mas ninguem reclamou!",
+    );
+  });
+
+  // A maiúscula existe porque uma frase começou, e a frase é o que a pontuação marcava.
+  // Manter as maiúsculas sem a pontuação deixaria o Shift sem motivo na tela.
+  test("sem pontuação, o texto também perde as maiúsculas", () => {
+    expect(applyOptions(FRASE, { accents: true, punctuation: false })).toBe(
+      "o café da manhã estava frio mas ninguém reclamou",
+    );
+  });
+
+  test("sem os dois, sobra só letra e espaço", () => {
+    expect(applyOptions(FRASE, { accents: false, punctuation: false })).toBe(
+      "o cafe da manha estava frio mas ninguem reclamou",
+    );
+  });
+
+  test("o padrão não mexe em nada", () => {
+    expect(applyOptions(FRASE, DEFAULT_STREAM_OPTIONS)).toBe(FRASE);
+  });
+
+  // Tirar pontuação deixa espaços duplos onde a vírgula estava colada.
+  test("não sobra espaço dobrado onde a pontuação saiu", () => {
+    expect(applyOptions("a, b. c", { accents: true, punctuation: false })).toBe("a b c");
+  });
+
+  test("a corrida inteira respeita a escolha", () => {
+    const stream = buildStream(() => 0.5, { accents: false, punctuation: false });
+    expect(stream).not.toMatch(/[áéíóúãõçâêô.,;:!?]/);
+  });
+
+  // O texto-fonte é português correto; sem isso não existe modo "com acento".
+  test("o padrão traz acento de verdade", () => {
+    expect(buildStream(() => 0.5)).toMatch(/[áéíóúãõç]/);
   });
 });
