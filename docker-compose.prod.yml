@@ -1,0 +1,60 @@
+# O que roda em producao, no droplet compartilhado.
+#
+# Este arquivo e a copia fiel do que esta em ~/typing-race no servidor. Ele vive
+# aqui para o repositorio nao mentir sobre o que esta no ar: sem isso, a unica
+# descricao do deploy estaria dentro da maquina que ela descreve.
+#
+# Sem banco: as salas vivem na memória e somem quando o último jogador sai.
+#
+# Os dois containers entram na rede `proxy` com apelido do projeto. O Caddy
+# compartilhado é quem fala com o mundo; nada aqui abre porta na máquina.
+x-endurecido: &endurecido
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  restart: unless-stopped
+  networks:
+    proxy:
+
+services:
+  api:
+    <<: *endurecido
+    image: ${API_IMAGE}
+    env_file: .env
+    expose:
+      - "3001"
+    # /health devolve a contagem de salas, entao ele prova que o registro
+    # responde — e nao apenas que o processo esta de pe. O Docker nao reinicia
+    # container "unhealthy" sozinho: isto serve para a falha aparecer no painel
+    # em vez de passar em silencio.
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3001/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      proxy:
+        aliases:
+          - typing-api
+
+  web:
+    <<: *endurecido
+    image: ${WEB_IMAGE}
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      proxy:
+        aliases:
+          - typing-web
+
+networks:
+  proxy:
+    external: true
