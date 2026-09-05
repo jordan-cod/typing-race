@@ -6,3 +6,10 @@ dist/
 *.log
 .env
 .env.local
+
+# The built site is embedded into the binary, so the directory has to exist even when it is
+# empty; go:embed fails on a pattern that matches nothing.
+!web/dist/.gitkeep
+
+# The binary is built into bin/.
+bin/

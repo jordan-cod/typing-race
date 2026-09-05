@@ -9,11 +9,30 @@ Live at <https://typing.jrdan.dev>.
 
 ## Stack
 
-- Bun 1.3 workspaces monorepo
-- `apps/api` — Elysia + WebSockets, `bun test`
-- `apps/web` — React 19 + TanStack Router + Vite + Tailwind v4, Vitest
-- `packages/protocol` — the wire contract (Zod 4) and the race rules, shared by both apps
-- Biome for lint and format, TypeScript strict, no `any`
+- **Go 1.25** — the server and the race rules. Standard library HTTP, `coder/websocket`, one
+  goroutine per socket. No framework.
+- **React 19** + TanStack Router + Vite + Tailwind v4 for the site.
+- The binary **embeds the built site**, so one artefact serves the page, the API and the
+  WebSocket on one port. There is no second container and no way for the two to be on
+  different versions.
+- Biome for lint and format, TypeScript strict, no `any`.
+
+### The wire contract is generated, not written twice
+
+`internal/protocol` in Go is the only definition of what travels on the socket.
+`web/src/protocol/generated.ts` comes out of it via [tygo](https://github.com/gzuidhof/tygo)
+and must not be edited; `make protocol` regenerates it and CI fails if the committed file is
+behind the Go source.
+
+Two things resist generation, and both are pinned by tests rather than trusted:
+
+- The **unions** (`RacePhase`, `ErrorCode`, `ClientMessage`, `ServerMessage`) are emitted by
+  hand, because tygo flattens a Go string type to `string`. `TestGeneratedUnionsMatchGo` reads
+  the generated file and fails if a Go constant is missing from it, or if it has a member Go
+  does not.
+- **WPM and accuracy** exist on both sides, because the browser recomputes them per keystroke
+  instead of once per broadcast. The Go suite writes `stats.golden.json`; the Vitest suite
+  checks the TypeScript against it. Change the formula on one side and the other goes red.
 
 Fonts (Archivo, IBM Plex Mono) are self-hosted through Fontsource, so there is no CDN request
 at runtime and the Docker build is deterministic. The visual direction is written down in
@@ -22,24 +41,24 @@ at runtime and the Docker build is deterministic. The visual direction is writte
 ## Running it
 
 ```bash
-bun install
-bun run dev          # API on :3001 and web on :3000
+make dev             # Go on :3001, Vite on :3000 proxying to it
 ```
 
-Or one at a time:
+Vite proxies `/api` and `/ws` to the Go server so development has one origin, the same as
+production. Nothing about the deployment is baked into the bundle — the page talks to wherever
+it was served from — so there is no `VITE_API_URL` to set. The server reads `PORT`.
+
+`make` on its own lists every target.
 
 ```bash
-bun run --filter @typing-race/api dev
-bun run --filter @typing-race/web dev
+make build           # the single binary, website included, into bin/
+make protocol        # regenerate the TypeScript contract from the Go types
 ```
-
-The web app talks to `http://localhost:3001` by default. Override with `VITE_API_URL`; the API
-reads `PORT` and `WEB_ORIGIN`.
 
 ## Trying a race with two browser windows
 
-1. Open <http://localhost:3000>, type a nickname, click **Criar sala**.
-2. Copy the room link (**copiar link**) and open it in a second window.
+1. Open <http://localhost:3000>, type a nickname, click **Chamar alguém**.
+2. Copy the room link from the button at the top and open it in a second window.
 3. The nickname is kept in `localStorage`, so a second window of the *same* browser arrives
    with the same name and the room refuses it. The screen asks for another nickname right
    there — type a different one and continue. Two different browsers (or one normal and one
@@ -58,17 +77,23 @@ re-wraps and the race keeps running).
 ## Tests
 
 ```bash
-bun run test         # both apps
-bun run typecheck
-bun run check        # Biome
+make test            # go test -race, then Vitest
+make check           # gofmt, go vet, tsc, Biome, and that the contract is current
 ```
 
-The rules that decide a race are pure functions, so they are tested directly rather than
-through a socket: the sixty-second end on the server clock, ranking by correct characters with
-accuracy breaking a dead heat and a genuine tie sharing a rank, progress validation (paste and
-impossible speed), late reports still in flight when the bell rings, mid-race disconnects,
-latecomers as spectators, and on the web side the typing model, the streak, and the line
-layout that scrolls the text.
+The rules that decide a race take the clock as an argument and do no I/O, so they are tested
+directly rather than through a socket: the sixty-second end on the server clock, ranking by
+correct characters with accuracy breaking a dead heat and a genuine tie sharing a rank,
+progress validation (paste and impossible speed), late reports still in flight when the bell
+rings, mid-race disconnects, latecomers as spectators, and on the web side the typing model,
+the streak, and the line layout that scrolls the text.
+
+On top of that the server is tested over a real WebSocket — joining, the ready gate, both
+players receiving the same text, the countdown instants, a malformed frame being answered
+without killing the socket, and a fatal error reaching the browser before the socket closes.
+
+`go test` runs with `-race` everywhere, including in CI. The server is goroutine-per-socket,
+so a suite without it would be testing a program nobody runs.
 
 ## Decisions
 
@@ -130,6 +155,17 @@ separate link offers training alone, described as training rather than a race.
 characters and stays in the ranking; the race only ends early if *everyone* has dropped.
 Someone who arrives after the start watches this minute and races in the next one.
 
+**One binary, one container.** The Go binary embeds the built site and serves it, the API and
+the WebSocket from the same port. The production image is `FROM scratch` — the binary and
+nothing else, 12 MB, running as an unprivileged UID with every capability dropped. It has no
+shell, so the container healthcheck is the binary asking itself: `typing -healthcheck`.
+
+**One mutex, not an actor per room.** The room state machine does no locking of its own; the
+hub holds a single lock and only while state is being read or written. Frames leave through a
+buffered channel per connection, so a slow client can never stall a room from inside the
+critical section — and if it falls more than four seconds behind, its socket is closed and it
+reconnects rather than holding everyone else up.
+
 **Rooms are ephemeral.** In memory, gone when the last person disconnects, and a code nobody
 ever used expires after two minutes. No database.
 
@@ -142,15 +178,23 @@ and the second join is rejected as a duplicate nickname before the first one clo
 ## Layout
 
 ```
-apps/api/src/race/room.ts        race state machine — takes the clock as an argument, no I/O
-apps/api/src/race/registry.ts    in-memory rooms and their lifetime
-apps/api/src/index.ts            HTTP + WebSocket, translation only
-packages/protocol/src/rules.ts   WPM, accuracy, progress validation, ranking
-packages/protocol/src/stream.ts  builds the endless text for one race
-packages/protocol/src/messages.ts    client <-> server messages (Zod, validated both ways)
-packages/protocol/src/passages.ts    20 built-in Portuguese passages
-apps/web/src/lib/typing.ts       the typing model (strict errors, streaks), unit-tested
-apps/web/src/lib/lines.ts        line layout: index -> line and column, unit-tested
-apps/web/src/lib/sound.ts        Web Audio keystrokes
-apps/web/src/components/StreamView.tsx   three lines, live line held still
+cmd/typing/main.go               the process: flags, signals, graceful shutdown
+internal/protocol/messages.go    the wire contract — tygo generates the TypeScript from this
+internal/protocol/parse.go       the only place a client is taken at its word
+internal/race/room.go            race state machine — takes the clock as an argument, no I/O
+internal/race/registry.go        in-memory rooms and their lifetime
+internal/race/rules.go           WPM, accuracy, progress validation, ranking
+internal/race/stream.go          builds the endless text for one race
+internal/race/passages.go        20 built-in Portuguese passages
+internal/server/hub.go           sockets, broadcast, and the one ticker that drives every room
+internal/server/handlers.go      one client frame in, the frames it produced out
+internal/server/server.go        routes, and the embedded site with its SPA fallback
+web/embed.go                     carries web/dist into the binary
+web/src/protocol/generated.ts    generated — do not edit
+web/src/lib/typing.ts            the typing model (strict errors, streaks), unit-tested
+web/src/lib/lines.ts             line layout: index -> line and column, unit-tested
+web/src/lib/sound.ts             Web Audio keystrokes
+web/src/components/StreamView.tsx    three lines, live line held still
 ```
+
+Deploy is described in [`docs/deploy.md`](docs/deploy.md).

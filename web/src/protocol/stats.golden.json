@@ -1,0 +1,79 @@
+[
+  {
+    "correctChars": 0,
+    "errors": 0,
+    "elapsedMs": 0,
+    "wpm": 0,
+    "accuracy": 100
+  },
+  {
+    "correctChars": 0,
+    "errors": 0,
+    "elapsedMs": 1000,
+    "wpm": 0,
+    "accuracy": 100
+  },
+  {
+    "correctChars": 100,
+    "errors": 0,
+    "elapsedMs": 0,
+    "wpm": 0,
+    "accuracy": 100
+  },
+  {
+    "correctChars": 250,
+    "errors": 0,
+    "elapsedMs": 60000,
+    "wpm": 50,
+    "accuracy": 100
+  },
+  {
+    "correctChars": 250,
+    "errors": 50,
+    "elapsedMs": 60000,
+    "wpm": 50,
+    "accuracy": 83.3
+  },
+  {
+    "correctChars": 100,
+    "errors": 4,
+    "elapsedMs": 10000,
+    "wpm": 120,
+    "accuracy": 96.2
+  },
+  {
+    "correctChars": 1,
+    "errors": 0,
+    "elapsedMs": 60000,
+    "wpm": 0.2,
+    "accuracy": 100
+  },
+  {
+    "correctChars": 333,
+    "errors": 17,
+    "elapsedMs": 47500,
+    "wpm": 84.1,
+    "accuracy": 95.1
+  },
+  {
+    "correctChars": 1512,
+    "errors": 0,
+    "elapsedMs": 60000,
+    "wpm": 302.4,
+    "accuracy": 100
+  },
+  {
+    "correctChars": 0,
+    "errors": 20,
+    "elapsedMs": 30000,
+    "wpm": 0,
+    "accuracy": 0
+  },
+  {
+    "correctChars": 7,
+    "errors": 3,
+    "elapsedMs": 3333,
+    "wpm": 25.2,
+    "accuracy": 70
+  }
+]

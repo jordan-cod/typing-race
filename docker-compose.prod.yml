@@ -1,59 +1,32 @@
 # O que roda em producao, no droplet compartilhado.
 #
-# Este arquivo e a copia fiel do que esta em ~/typing-race no servidor. Ele vive
-# aqui para o repositorio nao mentir sobre o que esta no ar: sem isso, a unica
-# descricao do deploy estaria dentro da maquina que ela descreve.
+# Este arquivo e a copia fiel do que esta em ~/typing-race no servidor. Ele vive aqui para o
+# repositorio nao mentir sobre o que esta no ar: sem isso, a unica descricao do deploy estaria
+# dentro da maquina que ela descreve.
 #
-# Sem banco: as salas vivem na memória e somem quando o último jogador sai.
+# Um servico so. O binario Go serve o site e a API na mesma porta, entao o container do Caddy
+# que servia o bundle deixou de existir — junto com a chance de site e API estarem em versoes
+# diferentes.
 #
-# Os dois containers entram na rede `proxy` com apelido do projeto. O Caddy
-# compartilhado é quem fala com o mundo; nada aqui abre porta na máquina.
-x-endurecido: &endurecido
-  security_opt:
-    - no-new-privileges:true
-  cap_drop:
-    - ALL
-  restart: unless-stopped
-  networks:
-    proxy:
-
+# Sem banco: as salas vivem na memoria e somem quando o ultimo jogador sai.
 services:
-  api:
-    <<: *endurecido
-    image: ${API_IMAGE}
-    env_file: .env
+  app:
+    image: ${APP_IMAGE}
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # A imagem e `scratch` e o processo nao escreve nada em lugar nenhum.
+    read_only: true
+    restart: unless-stopped
     expose:
       - "3001"
-    # /health devolve a contagem de salas, entao ele prova que o registro
-    # responde — e nao apenas que o processo esta de pe. O Docker nao reinicia
-    # container "unhealthy" sozinho: isto serve para a falha aparecer no painel
-    # em vez de passar em silencio.
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:3001/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
+    # O healthcheck vem do Dockerfile: o proprio binario se consulta, porque numa imagem sem
+    # shell nao existe wget para chamar.
     networks:
       proxy:
         aliases:
-          - typing-api
-
-  web:
-    <<: *endurecido
-    image: ${WEB_IMAGE}
-    expose:
-      - "8080"
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:8080/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
-    networks:
-      proxy:
-        aliases:
-          - typing-web
+          - typing
 
 networks:
   proxy:
