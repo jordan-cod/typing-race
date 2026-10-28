@@ -154,12 +154,17 @@ jobs:
           script: docker logout ghcr.io
 
       - name: Health check
-        run: |
-          for attempt in $(seq 1 10); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "https://${{ secrets.TYPING_DOMAIN }}/health" || true)
-            [ "$code" = "200" ] && { echo "up (attempt $attempt)"; exit 0; }
-            echo "attempt $attempt: $code"
-            sleep 6
-          done
-          echo "did not return 200 after deploy"
-          exit 1
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: |
+            for attempt in $(seq 1 10); do
+              docker exec proxy-caddy-1 wget -qO- http://typing:3001/health >/dev/null 2>&1 && { echo "up (attempt $attempt)"; exit 0; }
+              echo "attempt $attempt: not ready"
+              sleep 6
+            done
+            echo "did not answer /health after deploy"
+            exit 1
